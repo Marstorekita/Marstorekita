@@ -1,0 +1,17 @@
+# Firebase
+.firebase
+firebase-debug.log
+*.log
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pembayaran - Marstorekita</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+      body {
+        font-family: "Inter", sans-serif;
+      }
+
+      .gradient-bg {
+        background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
+      }
+
+      .payment-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+
+      .payment-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      }
+
+      .payment-card.selected {
+        border: 3px solid #00b4d8;
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      }
+
+      .loading-spinner {
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #00b4d8;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .countdown {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #ff6b6b;
+      }
+
+      .success-animation {
+        animation: successPulse 0.6s ease-in-out;
+      }
+
+      @keyframes successPulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .shake {
+        animation: shake 0.5s;
+      }
+
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        10%,
+        30%,
+        50%,
+        70%,
+        90% {
+          transform: translateX(-5px);
+        }
+        20%,
+        40%,
+        60%,
+        80% {
+          transform: translateX(5px);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+      <div class="container mx-auto px-4 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <div
+              class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center"
+            >
+              <i class="fas fa-gamepad text-white text-xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">Robux Top Up</h1>
+          </div>
+          <nav class="hidden md:flex items-center space-x-6">
+            <a
+              href="index.html"
+              class="text-gray-600 hover:text-blue-600 transition"
+              >Beranda</a
+            >
+            <a
+              href="#"
+              onclick="showHowToTopUp()"
+              class="text-gray-600 hover:text-blue-600 transition cursor-pointer"
+              >Cara Top Up</a
+            >
+            <a
+              href="#"
+              onclick="showHelp()"
+              class="text-gray-600 hover:text-blue-600 transition cursor-pointer"
+              >Bantuan</a
+            >
+          </nav>
+          <button class="md:hidden text-gray-600" onclick="toggleMobileMenu()">
+            <i class="fas fa-bars text-2xl"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+      <div class="max-w-4xl mx-auto">
+        <!-- Order Summary -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <h2 class="text-2xl font-bold text-gray-800 mb-6">
+            Ringkasan Pesanan
+          </h2>
+
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-gray-600">Username:</span>
+                  <span id="displayUsername" class="font-semibold text-gray-800"
+                    >-</span
+                  >
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600">Nomor HP:</span>
+                  <span id="displayPhone" class="font-semibold text-gray-800"
+                    >-</span
+                  >
+                </div>
+              </div>
+
+              <div class="bg-gray-50 rounded-lg p-4">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-gray-600">Paket:</span>
+                  <span id="selectedPackage" class="font-semibold text-gray-800"
+                    >-</span
+                  >
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600">Jumlah Robux:</span>
+                  <span id="selectedRobux" class="font-semibold text-green-600"
+                    >-</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-gray-700 font-medium"
+                    >Metode Pembayaran:</span
+                  >
+                  <span
+                    id="selectedPaymentMethod"
+                    class="font-semibold text-blue-700"
+                    >-</span
+                  >
+                </div>
+              </div>
+
+              <div class="bg-gray-50 rounded-lg p-4">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-gray-600">Subtotal:</span>
+                  <span id="subtotal" class="font-medium">Rp 0</span>
+                </div>
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-gray-600">Admin Fee:</span>
+                  <span class="font-medium">Rp 0</span>
+                </div>
+                <div
+                  class="flex justify-between items-center text-lg font-bold"
+                >
+                  <span>Total:</span>
+                  <span id="totalPayment" class="text-blue-600">Rp 0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment Section -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <h2 class="text-2xl font-bold text-gray-800 mb-6">Pembayaran</h2>
+
+          <!-- QRIS Payment -->
+          <div id="qrisPayment" class="hidden">
+            <div class="text-center mb-6">
+              <p class="text-gray-600 mb-4">
+                Scan kode QR di bawah ini untuk membayar
+              </p>
+              <div class="bg-gray-100 p-4 rounded-lg inline-block">
+                <div id="qrcode"></div>
+              </div>
+              <p class="text-sm text-gray-500 mt-4">
+                Kode QR berlaku selama
+                <span id="countdown" class="countdown">15:00</span>
+              </p>
+            </div>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-yellow-700">
+                    Pastikan pembayaran selesai sebelum waktu habis. Jika waktu
+                    habis, silakan muat ulang halaman ini.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-center space-x-4">
+              <button
+                onclick="checkPaymentStatus()"
+                class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+              >
+                <i class="fas fa-check mr-2"></i>Saya Sudah Bayar
+              </button>
+              <button
+                onclick="window.location.reload()"
+                class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+              >
+                <i class="fas fa-sync-alt mr-2"></i>Muat Ulang
+              </button>
+            </div>
+          </div>
+
+          <!-- E-Wallet Payment -->
+          <div id="ewalletPayment" class="hidden">
+            <div class="text-center mb-6">
+              <p class="text-gray-600 mb-4">
+                Pilih E-Wallet yang ingin Anda gunakan
+              </p>
+
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div
+                  class="payment-card bg-white border-2 border-gray-200 rounded-xl p-4 text-center"
+                  onclick="selectEwallet('ovo')"
+                >
+                  <div
+                    class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3"
+                  >
+                    <i class="fas fa-wallet text-purple-600 text-2xl"></i>
+                  </div>
+                  <p class="font-medium text-gray-800">OVO</p>
+                </div>
+
+                <div
+                  class="payment-card bg-white border-2 border-gray-200 rounded-xl p-4 text-center"
+                  onclick="selectEwallet('gopay')"
+                >
+                  <div
+                    class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3"
+                  >
+                    <i class="fas fa-wallet text-blue-600 text-2xl"></i>
+                  </div>
+                  <p class="font-medium text-gray-800">GoPay</p>
+                </div>
+
+                <div
+                  class="payment-card bg-white border-2 border-gray-200 rounded-xl p-4 text-center"
+                  onclick="selectEwallet('dana')"
+                >
+                  <div
+                    class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3"
+                  >
+                    <i class="fas fa-wallet text-blue-600 text-2xl"></i>
+                  </div>
+                  <p class="font-medium text-gray-800">DANA</p>
+                </div>
+
+                <div
+                  class="payment-card bg-white border-2 border-gray-200 rounded-xl p-4 text-center"
+                  onclick="selectEwallet('shopeepay')"
+                >
+                  <div
+                    class="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3"
+                  >
+                    <i class="fas fa-wallet text-orange-600 text-2xl"></i>
+                  </div>
+                  <p class="font-medium text-gray-800">ShopeePay</p>
+                </div>
+              </div>
+
+              <div
+                id="ewalletInstructions"
+                class="hidden bg-gray-50 rounded-lg p-4 text-left"
+              >
+                <h3 class="font-semibold text-gray-800 mb-2">
+                  Instruksi Pembayaran:
+                </h3>
+                <ol class="list-decimal pl-5 text-gray-600 space-y-1">
+                  <li>Klik tombol "Bayar Sekarang" di bawah</li>
+                  <li>
+                    Anda akan diarahkan ke aplikasi
+                    <span id="ewalletName"></span>
+                  </li>
+                  <li>
+                    Konfirmasi pembayaran dengan nominal yang telah ditentukan
+                  </li>
+                  <li>
+                    Setelah pembayaran berhasil, kembali ke halaman ini dan klik
+                    "Saya Sudah Bayar"
+                  </li>
+                </ol>
+              </div>
+
+              <div
+                id="ewalletButtons"
+                class="hidden mt-6 flex justify-center space-x-4"
+              >
+                <button
+                  onclick="processEwalletPayment()"
+                  class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+                >
+                  <i class="fas fa-credit-card mr-2"></i>Bayar Sekarang
+                </button>
+                <button
+                  onclick="checkPaymentStatus()"
+                  class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition"
+                >
+                  <i class="fas fa-check mr-2"></i>Saya Sudah Bayar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bank Transfer Payment -->
+          <div id="bankPayment" class="hidden">
+            <div class="text-center mb-6">
+              <p class="text-gray-600 mb-4">
+                Silakan transfer ke rekening berikut:
+              </p>
+
+              <div class="bg-gray-50 rounded-lg p-6 mb-6 max-w-md mx-auto">
+                <div class="flex justify-between items-center mb-4">
+                  <span class="text-gray-600">Bank:</span>
+                  <span class="font-semibold">BCA</span>
+                </div>
+                <div class="flex justify-between items-center mb-4">
+                  <span class="text-gray-600">No. Rekening:</span>
+                  <span class="font-semibold">1234567890</span>
+                </div>
+                <div class="flex justify-between items-center mb-4">
+                  <span class="text-gray-600">Atas Nama:</span>
+                  <span class="font-semibold">Marstorekita</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600">Jumlah:</span>
+                  <span id="bankAmount" class="font-semibold text-blue-600"
+                    >Rp 0</span
+                  >
+                </div>
+              </div>
+
+              <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                <div class="flex">
+                  <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                  </div>
+                  <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                      Pastikan jumlah transfer sesuai dengan yang tertera.
+                      Transfer dengan jumlah berbeda tidak akan diproses.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex justify-center space-x-4">
+                <button
+                  onclick="copyBankDetails()"
+                  class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+                >
+                  <i class="fas fa-copy mr-2"></i>Salin Detail
+                </button>
+                <button
+                  onclick="checkPaymentStatus()"
+                  class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+                >
+                  <i class="fas fa-check mr-2"></i>Saya Sudah Bayar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div
+          id="loadingOverlay"
+          class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50"
+        >
+          <div class="bg-white rounded-xl p-8 text-center">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-gray-800 font-medium">Memproses pembayaran...</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Success Modal -->
+    <div
+      id="successModal"
+      class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50"
+    >
+      <div
+        class="bg-white rounded-xl p-8 max-w-md w-full mx-4 transform transition-all"
+      >
+        <div class="text-center">
+          <div
+            class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 success-animation"
+          >
+            <i class="fas fa-check text-green-600 text-3xl"></i>
+          </div>
+          <h3 class="text-2xl font-bold text-gray-800 mb-2">
+            Pembayaran Berhasil!
+          </h3>
+          <p class="text-gray-600 mb-6">Robux akan segera masuk ke akun Anda</p>
+          <button
+            onclick="closeModal()"
+            class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div
+      id="errorModal"
+      class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50"
+    >
+      <div
+        class="bg-white rounded-xl p-8 max-w-md w-full mx-4 transform transition-all"
+      >
+        <div class="text-center">
+          <div
+            class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"
+          >
+            <i class="fas fa-times text-red-600 text-3xl"></i>
+          </div>
+          <h3 class="text-2xl font-bold text-gray-800 mb-2">
+            Pembayaran Gagal!
+          </h3>
+          <p id="errorMessage" class="text-gray-600 mb-6">
+            Terjadi kesalahan dalam memproses pembayaran Anda
+          </p>
+          <button
+            onclick="closeErrorModal()"
+            class="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition"
+          >
+            Coba Lagi
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Global variables
+      let orderData = null;
+      let selectedEwallet = null;
+      let countdownTimer = null;
+      let paymentTimeout = null;
+
+      // Initialize page
+      document.addEventListener("DOMContentLoaded", function () {
+        // Load order data from localStorage
+        loadOrderData();
+
+        // Initialize payment based on selected method
+        initializePayment();
+      });
+
+      // Load order data from localStorage
+      function loadOrderData() {
+        // Get the most recent transaction from history
+        const history = JSON.parse(
+          localStorage.getItem("transactionHistory") || "[]"
+        );
+        if (history.length > 0) {
+          orderData = history[0]; // Get the most recent transaction
+
+          // Display order information
+          document.getElementById("displayUsername").textContent =
+            orderData.username;
+          document.getElementById("displayPhone").textContent =
+            orderData.phoneNumber;
+          document.getElementById(
+            "selectedPackage"
+          ).textContent = `Paket ${orderData.package.robux} Robux`;
+          document.getElementById(
+            "selectedRobux"
+          ).textContent = `${orderData.package.robux} Robux`;
+          document.getElementById(
+            "subtotal"
+          ).textContent = `Rp ${orderData.package.price.toLocaleString(
+            "id-ID"
+          )}`;
+          document.getElementById(
+            "totalPayment"
+          ).textContent = `Rp ${orderData.package.price.toLocaleString(
+            "id-ID"
+          )}`;
+          document.getElementById(
+            "bankAmount"
+          ).textContent = `Rp ${orderData.package.price.toLocaleString(
+            "id-ID"
+          )}`;
+
+          // Display payment method
+          const paymentMethodText = {
+            qris: "QRIS",
+            bank: "Transfer Bank",
+            ewallet: "E-Wallet",
+          };
+          document.getElementById("selectedPaymentMethod").textContent =
+            paymentMethodText[orderData.paymentMethod] || "-";
+        } else {
+          // If no order data found, redirect back to home page
+          window.location.href = "index.html";
+        }
+      }
+
+      // Initialize payment based on selected method
+      function initializePayment() {
+        if (!orderData) return;
+
+        // Hide all payment sections first
+        document.getElementById("qrisPayment").classList.add("hidden");
+        document.getElementById("ewalletPayment").classList.add("hidden");
+        document.getElementById("bankPayment").classList.add("hidden");
+
+        // Show the appropriate payment section based on the selected method
+        switch (orderData.paymentMethod) {
+          case "qris":
+            initializeQRISPayment();
+            break;
+          case "ewallet":
+            document
+              .getElementById("ewalletPayment")
+              .classList.remove("hidden");
+            break;
+          case "bank":
+            document.getElementById("bankPayment").classList.remove("hidden");
+            break;
+          default:
+            // Default to QRIS if no valid method is selected
+            initializeQRISPayment();
+        }
+      }
+
+      // Initialize QRIS payment
+      function initializeQRISPayment() {
+        document.getElementById("qrisPayment").classList.remove("hidden");
+
+        // Generate QR code for payment to 85711603847
+        const qrcodeContainer = document.getElementById("qrcode");
+        qrcodeContainer.innerHTML = ""; // Clear previous QR code
+
+        // Create payment data for QRIS
+        const paymentAmount = orderData.package.price;
+        const paymentData = {
+          merchantName: "Marstorekita",
+          amount: paymentAmount,
+          phone: "85711603847",
+          description: `Pembayaran Robux ${orderData.package.robux}`,
+        };
+
+        // Generate QR code
+        new QRCode(qrcodeContainer, {
+          text: JSON.stringify(paymentData),
+          width: 200,
+          height: 200,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H,
+        });
+
+        // Start countdown timer (15 minutes)
+        startCountdown(15 * 60); // 15 minutes in seconds
+
+        // Set payment timeout (15 minutes)
+        paymentTimeout = setTimeout(() => {
+          showErrorModal(
+            "Waktu pembayaran habis. Silakan muat ulang halaman ini."
+          );
+        }, 15 * 60 * 1000); // 15 minutes in milliseconds
+      }
+
+      // Start countdown timer
+      function startCountdown(seconds) {
+        let timeLeft = seconds;
+
+        // Clear any existing countdown timer
+        if (countdownTimer) {
+          clearInterval(countdownTimer);
+        }
+
+        // Update countdown display
+        updateCountdownDisplay(timeLeft);
+
+        // Start countdown timer
+        countdownTimer = setInterval(() => {
+          timeLeft--;
+          updateCountdownDisplay(timeLeft);
+
+          // If time is up, clear the timer
+          if (timeLeft <= 0) {
+            clearInterval(countdownTimer);
+          }
+        }, 1000);
+      }
+
+      // Update countdown display
+      function updateCountdownDisplay(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        document.getElementById("countdown").textContent = `${minutes
+          .toString()
+          .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+
+        // Change color if less than 5 minutes
+        if (minutes < 5) {
+          document.getElementById("countdown").classList.add("text-red-500");
+        }
+      }
+
+      // Select E-Wallet
+      function selectEwallet(ewallet) {
+        // Remove previous selection
+        document.querySelectorAll(".payment-card").forEach((card) => {
+          card.classList.remove("selected");
+        });
+
+        // Add selection to clicked card
+        event.currentTarget.classList.add("selected");
+
+        selectedEwallet = ewallet;
+
+        // Update E-Wallet name in instructions
+        const ewalletNames = {
+          ovo: "OVO",
+          gopay: "GoPay",
+          dana: "DANA",
+          shopeepay: "ShopeePay",
+        };
+        document.getElementById("ewalletName").textContent =
+          ewalletNames[ewallet];
+
+        // Show instructions and buttons
+        document
+          .getElementById("ewalletInstructions")
+          .classList.remove("hidden");
+        document.getElementById("ewalletButtons").classList.remove("hidden");
+      }
+
+      // Process E-Wallet payment
+      function processEwalletPayment() {
+        if (!selectedEwallet) {
+          showErrorModal("Silakan pilih E-Wallet terlebih dahulu");
+          return;
+        }
+
+        // Show loading overlay
+        document.getElementById("loadingOverlay").classList.remove("hidden");
+
+        // Simulate payment processing
+        setTimeout(() => {
+          // Hide loading overlay
+          document.getElementById("loadingOverlay").classList.add("hidden");
+
+          // Redirect to E-Wallet app (in a real implementation, this would use deep linking)
+          const ewalletUrls = {
+            ovo: "https://ovo.id",
+            gopay: "https://gojek.com/gopay",
+            dana: "https://dana.id",
+            shopeepay: "https://shopee.co.id/shopeepay",
+          };
+
+          // Open E-Wallet in a new window
+          window.open(ewalletUrls[selectedEwallet], "_blank");
+
+          // Show notification
+          alert(
+            `Anda akan diarahkan ke aplikasi ${
+              document.getElementById("ewalletName").textContent
+            }. Setelah pembayaran berhasil, kembali ke halaman ini dan klik "Saya Sudah Bayar".`
+          );
+        }, 1000);
+      }
+
+      // Copy bank details
+      function copyBankDetails() {
+        const bankDetails = `Bank: BCA\nNo. Rekening: 1234567890\nAtas Nama: Marstorekita\nJumlah: Rp ${orderData.package.price.toLocaleString(
+          "id-ID"
+        )}`;
+
+        // Copy to clipboard
+        navigator.clipboard
+          .writeText(bankDetails)
+          .then(() => {
+            alert("Detail pembayaran telah disalin ke clipboard!");
+          })
+          .catch((err) => {
+            console.error("Gagal menyalin detail pembayaran: ", err);
+            showErrorModal(
+              "Gagal menyalin detail pembayaran. Silakan salin manual."
+            );
+          });
+      }
+
+      // Check payment status
+      function checkPaymentStatus() {
+        // Show loading overlay
+        document.getElementById("loadingOverlay").classList.remove("hidden");
+
+        // Simulate checking payment status
+        setTimeout(() => {
+          // Hide loading overlay
+          document.getElementById("loadingOverlay").classList.add("hidden");
+
+          // In a real implementation, this would check with the payment server
+          // For now, we'll simulate a successful payment
+          processSuccessfulPayment();
+        }, 2000);
+      }
+
+      // Process successful payment
+      function processSuccessfulPayment() {
+        // Update transaction status in history
+        const history = JSON.parse(
+          localStorage.getItem("transactionHistory") || "[]"
+        );
+        if (history.length > 0) {
+          history[0].status = "completed";
+          localStorage.setItem("transactionHistory", JSON.stringify(history));
+        }
+
+        // Clear any timers
+        if (countdownTimer) {
+          clearInterval(countdownTimer);
+        }
+
+        if (paymentTimeout) {
+          clearTimeout(paymentTimeout);
+        }
+
+        // Show success modal
+        document.getElementById("successModal").classList.remove("hidden");
+      }
+
+      // Show error modal
+      function showErrorModal(message) {
+        document.getElementById("errorMessage").textContent = message;
+        document.getElementById("errorModal").classList.remove("hidden");
+
+        // Shake animation
+        document
+          .getElementById("errorModal")
+          .querySelector(".bg-white")
+          .classList.add("shake");
+        setTimeout(() => {
+          document
+            .getElementById("errorModal")
+            .querySelector(".bg-white")
+            .classList.remove("shake");
+        }, 500);
+      }
+
+      // Close modal
+      function closeModal() {
+        document.getElementById("successModal").classList.add("hidden");
+
+        // Redirect to home page
+        window.location.href = "index.html";
+      }
+
+      // Close error modal
+      function closeErrorModal() {
+        document.getElementById("errorModal").classList.add("hidden");
+      }
+    </script>
+  </body>
+</html>
