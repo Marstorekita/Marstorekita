@@ -90,6 +90,14 @@ font-weight: 600;
 background-color: #fef3c7;
 color: #92400e;
 }
+.status-cek {
+background-color: #dbeafe;
+color: #1e40af;
+}
+.status-proses {
+background-color: #bfdbfe;
+color: #1d4ed8;
+}
 .status-completed {
 background-color: #d1fae5;
 color: #065f46;
@@ -460,6 +468,29 @@ font-weight: bold;
 </main>
 </div>
 </div>
+<!-- Status Update Modal -->
+<div id="statusUpdateModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+<div class="bg-white rounded-xl p-8 max-w-md w-full mx-4 transform transition-all">
+<div class="text-center">
+<h3 class="text-xl font-bold text-gray-800 mb-4">Update Status Transaksi</h3>
+<p class="text-gray-600 mb-6">Pilih status baru untuk transaksi ini:</p>
+<div class="space-y-3 mb-6">
+<button onclick="updateTransactionStatus(currentTransactionId, 'cek')" class="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition">
+<i class="fas fa-search mr-2"></i>Cek
+</button>
+<button onclick="updateTransactionStatus(currentTransactionId, 'proses')" class="w-full bg-yellow-600 text-white px-4 py-3 rounded-lg hover:bg-yellow-700 transition">
+<i class="fas fa-cog mr-2"></i>Proses
+</button>
+<button onclick="updateTransactionStatus(currentTransactionId, 'completed')" class="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition">
+<i class="fas fa-check mr-2"></i>Selesai
+</button>
+</div>
+<button onclick="closeStatusUpdateModal()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
+Batal
+</button>
+</div>
+</div>
+</div>
 <!-- Notification Toast -->
 <div id="notificationToast" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 transform translate-y-20 opacity-0 transition-all duration-300 max-w-md">
 <div class="flex items-start">
@@ -485,6 +516,7 @@ let debugLogs = [];
 let autoRefreshInterval = null;
 let notificationEnabled = true;
 let chart = null;
+let currentTransactionId = null;
 // Initialize the app
 document.addEventListener('DOMContentLoaded', function() {
 // Check if already logged in
@@ -660,17 +692,28 @@ row.innerHTML = `
 </td>
 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
 ${status === 'pending' ? `
-<button onclick="updateTransactionStatus('${id}', 'completed')" class="text-green-600 hover:text-green-900 mr-3">
-<i class="fas fa-check"></i> Selesai
+<button onclick="openStatusUpdateModal('${id}')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">
+<i class="fas fa-edit mr-1"></i> Ubah
 </button>
-<button onclick="updateTransactionStatus('${id}', 'failed')" class="text-red-600 hover:text-red-900">
-<i class="fas fa-times"></i> Gagal
+` : `
+<button onclick="openStatusUpdateModal('${id}')" class="bg-${getStatusColor(status)}-600 text-white px-3 py-1 rounded hover:bg-${getStatusColor(status)}-700 transition">
+${getStatusLabel(status)}
 </button>
-` : '-'}
+`}
 </td>
 `;
 tableBody.appendChild(row);
 });
+}
+// Get status color for button
+function getStatusColor(status) {
+switch (status) {
+case 'cek': return 'blue';
+case 'proses': return 'yellow';
+case 'completed': return 'green';
+case 'failed': return 'red';
+default: return 'gray';
+}
 }
 // Get payment method label
 function getPaymentMethodLabel(method) {
@@ -685,10 +728,22 @@ default: return method || '-';
 function getStatusLabel(status) {
 switch (status) {
 case 'pending': return 'Menunggu';
+case 'cek': return 'Cek';
+case 'proses': return 'Proses';
 case 'completed': return 'Selesai';
 case 'failed': return 'Gagal';
 default: return status;
 }
+}
+// Open status update modal
+function openStatusUpdateModal(transactionId) {
+currentTransactionId = transactionId;
+document.getElementById('statusUpdateModal').classList.remove('hidden');
+}
+// Close status update modal
+function closeStatusUpdateModal() {
+document.getElementById('statusUpdateModal').classList.add('hidden');
+currentTransactionId = null;
 }
 // Refresh transactions
 function refreshTransactions() {
@@ -745,6 +800,8 @@ if (transactionIndex !== -1) {
 localTransactions[transactionIndex].status = newStatus;
 localStorage.setItem("transactionHistory", JSON.stringify(localTransactions));
 }
+// Close modal
+closeStatusUpdateModal();
 // Reload transactions
 loadTransactions();
 // If analytics is open, reload it too
