@@ -10,32 +10,54 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+      import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+      
+      const firebaseConfig = {
+        apiKey: "AIzaSyAshvsXzust2ZAUMdfyQqQxKZCHni-8h_g",
+        authDomain: "marstorekita-robux.firebaseapp.com",
+        projectId: "marstorekita-robux",
+        storageBucket: "marstorekita-robux.firebasestorage.app",
+        messagingSenderId: "716103517831",
+        appId: "1:716103517831:web:c9c0e01a46d8793b7f9a22",
+        measurementId: "G-B4NF9BPFMK"
+      };
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      
+      // Make Firebase functions available globally
+      window.firebaseDb = db;
+      window.doc = doc;
+      window.getDoc = getDoc;
+      window.updateDoc = updateDoc;
+      window.serverTimestamp = serverTimestamp;
+      
+      console.log("Firebase initialized:", app);
+    </script>
+    
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
-
       body {
         font-family: "Inter", sans-serif;
       }
-
       .gradient-bg {
         background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
       }
-
       .payment-card {
         transition: all 0.3s ease;
         cursor: pointer;
       }
-
       .payment-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
       }
-
       .payment-card.selected {
         border: 3px solid #00b4d8;
         background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
       }
-
       .loading-spinner {
         border: 3px solid #f3f3f3;
         border-top: 3px solid #00b4d8;
@@ -44,7 +66,6 @@
         height: 40px;
         animation: spin 1s linear infinite;
       }
-
       @keyframes spin {
         0% {
           transform: rotate(0deg);
@@ -53,17 +74,14 @@
           transform: rotate(360deg);
         }
       }
-
       .countdown {
         font-size: 1.5rem;
         font-weight: bold;
         color: #ff6b6b;
       }
-
       .success-animation {
         animation: successPulse 0.6s ease-in-out;
       }
-
       @keyframes successPulse {
         0% {
           transform: scale(1);
@@ -75,11 +93,9 @@
           transform: scale(1);
         }
       }
-
       .shake {
         animation: shake 0.5s;
       }
-
       @keyframes shake {
         0%,
         100% {
@@ -139,7 +155,6 @@
         </div>
       </div>
     </header>
-
     <!-- Main Content -->
     <main class="container mx-auto px-4 py-8">
       <div class="max-w-4xl mx-auto">
@@ -148,7 +163,6 @@
           <h2 class="text-2xl font-bold text-gray-800 mb-6">
             Ringkasan Pesanan
           </h2>
-
           <div class="grid md:grid-cols-2 gap-6">
             <div>
               <div class="bg-gray-50 rounded-lg p-4 mb-4">
@@ -165,7 +179,6 @@
                   >
                 </div>
               </div>
-
               <div class="bg-gray-50 rounded-lg p-4">
                 <div class="flex justify-between items-center mb-2">
                   <span class="text-gray-600">Paket:</span>
@@ -181,7 +194,6 @@
                 </div>
               </div>
             </div>
-
             <div>
               <div class="bg-blue-50 rounded-lg p-4 mb-4">
                 <div class="flex justify-between items-center mb-2">
@@ -195,7 +207,6 @@
                   >
                 </div>
               </div>
-
               <div class="bg-gray-50 rounded-lg p-4">
                 <div class="flex justify-between items-center mb-2">
                   <span class="text-gray-600">Subtotal:</span>
@@ -215,11 +226,9 @@
             </div>
           </div>
         </div>
-
         <!-- Payment Section -->
         <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
           <h2 class="text-2xl font-bold text-gray-800 mb-6">Pembayaran</h2>
-
           <!-- QRIS Payment -->
           <div id="qrisPayment" class="hidden">
             <div class="text-center mb-6">
@@ -234,7 +243,6 @@
                 <span id="countdown" class="countdown">15:00</span>
               </p>
             </div>
-
             <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
               <div class="flex">
                 <div class="flex-shrink-0">
@@ -248,7 +256,6 @@
                 </div>
               </div>
             </div>
-
             <div class="flex justify-center space-x-4">
               <button
                 onclick="checkPaymentStatus()"
@@ -264,14 +271,12 @@
               </button>
             </div>
           </div>
-
           <!-- E-Wallet Payment -->
           <div id="ewalletPayment" class="hidden">
             <div class="text-center mb-6">
               <p class="text-gray-600 mb-4">
                 Pilih E-Wallet yang ingin Anda gunakan
               </p>
-
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div
                   class="payment-card bg-white border-2 border-gray-200 rounded-xl p-4 text-center"
@@ -284,7 +289,6 @@
                   </div>
                   <p class="font-medium text-gray-800">OVO</p>
                 </div>
-
                 <div
                   class="payment-card bg-white border-2 border-gray-200 rounded-xl p-4 text-center"
                   onclick="selectEwallet('gopay')"
@@ -296,7 +300,6 @@
                   </div>
                   <p class="font-medium text-gray-800">GoPay</p>
                 </div>
-
                 <div
                   class="payment-card bg-white border-2 border-gray-200 rounded-xl p-4 text-center"
                   onclick="selectEwallet('dana')"
@@ -308,7 +311,6 @@
                   </div>
                   <p class="font-medium text-gray-800">DANA</p>
                 </div>
-
                 <div
                   class="payment-card bg-white border-2 border-gray-200 rounded-xl p-4 text-center"
                   onclick="selectEwallet('shopeepay')"
@@ -321,7 +323,6 @@
                   <p class="font-medium text-gray-800">ShopeePay</p>
                 </div>
               </div>
-
               <div
                 id="ewalletInstructions"
                 class="hidden bg-gray-50 rounded-lg p-4 text-left"
@@ -344,7 +345,6 @@
                   </li>
                 </ol>
               </div>
-
               <div
                 id="ewalletButtons"
                 class="hidden mt-6 flex justify-center space-x-4"
@@ -364,14 +364,12 @@
               </div>
             </div>
           </div>
-
           <!-- Bank Transfer Payment -->
           <div id="bankPayment" class="hidden">
             <div class="text-center mb-6">
               <p class="text-gray-600 mb-4">
                 Silakan transfer ke rekening berikut:
               </p>
-
               <div class="bg-gray-50 rounded-lg p-6 mb-6 max-w-md mx-auto">
                 <div class="flex justify-between items-center mb-4">
                   <span class="text-gray-600">Bank:</span>
@@ -392,7 +390,6 @@
                   >
                 </div>
               </div>
-
               <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
                 <div class="flex">
                   <div class="flex-shrink-0">
@@ -406,7 +403,6 @@
                   </div>
                 </div>
               </div>
-
               <div class="flex justify-center space-x-4">
                 <button
                   onclick="copyBankDetails()"
@@ -424,7 +420,6 @@
             </div>
           </div>
         </div>
-
         <!-- Loading Overlay -->
         <div
           id="loadingOverlay"
@@ -437,7 +432,6 @@
         </div>
       </div>
     </main>
-
     <!-- Success Modal -->
     <div
       id="successModal"
@@ -465,7 +459,6 @@
         </div>
       </div>
     </div>
-
     <!-- Error Modal -->
     <div
       id="errorModal"
@@ -495,23 +488,19 @@
         </div>
       </div>
     </div>
-
     <script>
       // Global variables
       let orderData = null;
       let selectedEwallet = null;
       let countdownTimer = null;
       let paymentTimeout = null;
-
       // Initialize page
       document.addEventListener("DOMContentLoaded", function () {
         // Load order data from localStorage
         loadOrderData();
-
         // Initialize payment based on selected method
         initializePayment();
       });
-
       // Load order data from localStorage
       function loadOrderData() {
         // Get the most recent transaction from history
@@ -520,7 +509,6 @@
         );
         if (history.length > 0) {
           orderData = history[0]; // Get the most recent transaction
-
           // Display order information
           document.getElementById("displayUsername").textContent =
             orderData.username;
@@ -547,7 +535,6 @@
           ).textContent = `Rp ${orderData.package.price.toLocaleString(
             "id-ID"
           )}`;
-
           // Display payment method
           const paymentMethodText = {
             qris: "QRIS",
@@ -561,16 +548,13 @@
           window.location.href = "index.html";
         }
       }
-
       // Initialize payment based on selected method
       function initializePayment() {
         if (!orderData) return;
-
         // Hide all payment sections first
         document.getElementById("qrisPayment").classList.add("hidden");
         document.getElementById("ewalletPayment").classList.add("hidden");
         document.getElementById("bankPayment").classList.add("hidden");
-
         // Show the appropriate payment section based on the selected method
         switch (orderData.paymentMethod) {
           case "qris":
@@ -589,15 +573,12 @@
             initializeQRISPayment();
         }
       }
-
       // Initialize QRIS payment
       function initializeQRISPayment() {
         document.getElementById("qrisPayment").classList.remove("hidden");
-
         // Generate QR code for payment to 85711603847
         const qrcodeContainer = document.getElementById("qrcode");
         qrcodeContainer.innerHTML = ""; // Clear previous QR code
-
         // Create payment data for QRIS
         const paymentAmount = orderData.package.price;
         const paymentData = {
@@ -606,7 +587,6 @@
           phone: "85711603847",
           description: `Pembayaran Robux ${orderData.package.robux}`,
         };
-
         // Generate QR code
         new QRCode(qrcodeContainer, {
           text: JSON.stringify(paymentData),
@@ -616,10 +596,8 @@
           colorLight: "#ffffff",
           correctLevel: QRCode.CorrectLevel.H,
         });
-
         // Start countdown timer (15 minutes)
         startCountdown(15 * 60); // 15 minutes in seconds
-
         // Set payment timeout (15 minutes)
         paymentTimeout = setTimeout(() => {
           showErrorModal(
@@ -627,31 +605,25 @@
           );
         }, 15 * 60 * 1000); // 15 minutes in milliseconds
       }
-
       // Start countdown timer
       function startCountdown(seconds) {
         let timeLeft = seconds;
-
         // Clear any existing countdown timer
         if (countdownTimer) {
           clearInterval(countdownTimer);
         }
-
         // Update countdown display
         updateCountdownDisplay(timeLeft);
-
         // Start countdown timer
         countdownTimer = setInterval(() => {
           timeLeft--;
           updateCountdownDisplay(timeLeft);
-
           // If time is up, clear the timer
           if (timeLeft <= 0) {
             clearInterval(countdownTimer);
           }
         }, 1000);
       }
-
       // Update countdown display
       function updateCountdownDisplay(seconds) {
         const minutes = Math.floor(seconds / 60);
@@ -659,25 +631,20 @@
         document.getElementById("countdown").textContent = `${minutes
           .toString()
           .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-
         // Change color if less than 5 minutes
         if (minutes < 5) {
           document.getElementById("countdown").classList.add("text-red-500");
         }
       }
-
       // Select E-Wallet
       function selectEwallet(ewallet) {
         // Remove previous selection
         document.querySelectorAll(".payment-card").forEach((card) => {
           card.classList.remove("selected");
         });
-
         // Add selection to clicked card
         event.currentTarget.classList.add("selected");
-
         selectedEwallet = ewallet;
-
         // Update E-Wallet name in instructions
         const ewalletNames = {
           ovo: "OVO",
@@ -687,29 +654,24 @@
         };
         document.getElementById("ewalletName").textContent =
           ewalletNames[ewallet];
-
         // Show instructions and buttons
         document
           .getElementById("ewalletInstructions")
           .classList.remove("hidden");
         document.getElementById("ewalletButtons").classList.remove("hidden");
       }
-
       // Process E-Wallet payment
       function processEwalletPayment() {
         if (!selectedEwallet) {
           showErrorModal("Silakan pilih E-Wallet terlebih dahulu");
           return;
         }
-
         // Show loading overlay
         document.getElementById("loadingOverlay").classList.remove("hidden");
-
         // Simulate payment processing
         setTimeout(() => {
           // Hide loading overlay
           document.getElementById("loadingOverlay").classList.add("hidden");
-
           // Redirect to E-Wallet app (in a real implementation, this would use deep linking)
           const ewalletUrls = {
             ovo: "https://ovo.id",
@@ -717,10 +679,8 @@
             dana: "https://dana.id",
             shopeepay: "https://shopee.co.id/shopeepay",
           };
-
           // Open E-Wallet in a new window
           window.open(ewalletUrls[selectedEwallet], "_blank");
-
           // Show notification
           alert(
             `Anda akan diarahkan ke aplikasi ${
@@ -729,13 +689,11 @@
           );
         }, 1000);
       }
-
       // Copy bank details
       function copyBankDetails() {
         const bankDetails = `Bank: BCA\nNo. Rekening: 1234567890\nAtas Nama: Marstorekita\nJumlah: Rp ${orderData.package.price.toLocaleString(
           "id-ID"
         )}`;
-
         // Copy to clipboard
         navigator.clipboard
           .writeText(bankDetails)
@@ -749,52 +707,78 @@
             );
           });
       }
-
       // Check payment status
       function checkPaymentStatus() {
         // Show loading overlay
         document.getElementById("loadingOverlay").classList.remove("hidden");
-
         // Simulate checking payment status
         setTimeout(() => {
           // Hide loading overlay
           document.getElementById("loadingOverlay").classList.add("hidden");
-
           // In a real implementation, this would check with the payment server
           // For now, we'll simulate a successful payment
           processSuccessfulPayment();
         }, 2000);
       }
-
       // Process successful payment
-      function processSuccessfulPayment() {
-        // Update transaction status in history
-        const history = JSON.parse(
-          localStorage.getItem("transactionHistory") || "[]"
-        );
-        if (history.length > 0) {
-          history[0].status = "completed";
-          localStorage.setItem("transactionHistory", JSON.stringify(history));
+      async function processSuccessfulPayment() {
+        try {
+          // Get transaction from localStorage
+          const history = JSON.parse(localStorage.getItem("transactionHistory") || "[]");
+          if (history.length > 0) {
+            const transaction = history[0];
+            
+            // Update transaction status in Firebase if it has an ID
+            if (transaction.id) {
+              const transactionRef = doc(window.firebaseDb, 'transactions', transaction.id);
+              await updateDoc(transactionRef, {
+                status: 'completed',
+                updatedAt: serverTimestamp(),
+                paymentCompletedAt: new Date()
+              });
+            }
+            
+            // Update transaction status in localStorage
+            transaction.status = "completed";
+            localStorage.setItem("transactionHistory", JSON.stringify(history));
+          }
+          
+          // Clear any timers
+          if (countdownTimer) {
+            clearInterval(countdownTimer);
+          }
+          if (paymentTimeout) {
+            clearTimeout(paymentTimeout);
+          }
+          
+          // Show success modal
+          document.getElementById("successModal").classList.remove("hidden");
+        } catch (error) {
+          console.error('Error updating transaction status:', error);
+          
+          // Fallback to localStorage only
+          const history = JSON.parse(localStorage.getItem("transactionHistory") || "[]");
+          if (history.length > 0) {
+            history[0].status = "completed";
+            localStorage.setItem("transactionHistory", JSON.stringify(history));
+          }
+          
+          // Clear any timers
+          if (countdownTimer) {
+            clearInterval(countdownTimer);
+          }
+          if (paymentTimeout) {
+            clearTimeout(paymentTimeout);
+          }
+          
+          // Show success modal
+          document.getElementById("successModal").classList.remove("hidden");
         }
-
-        // Clear any timers
-        if (countdownTimer) {
-          clearInterval(countdownTimer);
-        }
-
-        if (paymentTimeout) {
-          clearTimeout(paymentTimeout);
-        }
-
-        // Show success modal
-        document.getElementById("successModal").classList.remove("hidden");
       }
-
       // Show error modal
       function showErrorModal(message) {
         document.getElementById("errorMessage").textContent = message;
         document.getElementById("errorModal").classList.remove("hidden");
-
         // Shake animation
         document
           .getElementById("errorModal")
@@ -807,15 +791,12 @@
             .classList.remove("shake");
         }, 500);
       }
-
       // Close modal
       function closeModal() {
         document.getElementById("successModal").classList.add("hidden");
-
         // Redirect to home page
         window.location.href = "index.html";
       }
-
       // Close error modal
       function closeErrorModal() {
         document.getElementById("errorModal").classList.add("hidden");
