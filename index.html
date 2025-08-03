@@ -1348,6 +1348,45 @@
         // Clear current transaction
         localStorage.removeItem('currentTransaction');
       }
+      
+      // Periksa status Firebase
+      setTimeout(() => {
+        if (!window.firebaseDb) {
+          console.warn("Firebase tidak terinisialisasi dengan benar. Mencoba menginisialisasi ulang...");
+          
+          // Coba muat ulang Firebase SDK
+          const firebaseScript = document.createElement('script');
+          firebaseScript.type = 'module';
+          firebaseScript.textContent = `
+            import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+            import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+            
+            const firebaseConfig = {
+              apiKey: "AIzaSyAshvsXzust2ZAUMdfyQqQxKZCHni-8h_g",
+              authDomain: "marstorekita-robux.firebaseapp.com",
+              projectId: "marstorekita-robux",
+              storageBucket: "marstorekita-robux.firebasestorage.app",
+              messagingSenderId: "716103517831",
+              appId: "1:716103517831:web:c9c0e01a46d8793b7f9a22",
+              measurementId: "G-B4NF9BPFMK"
+            };
+            
+            // Initialize Firebase
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            
+            // Make Firebase functions available globally
+            window.firebaseDb = db;
+            window.addDoc = addDoc;
+            window.collection = collection;
+            window.serverTimestamp = serverTimestamp;
+            
+            console.log("Firebase diinisialisasi ulang dengan berhasil");
+          `;
+          
+          document.head.appendChild(firebaseScript);
+        }
+      }, 3000);
     });
     
     // Language functions
@@ -1680,14 +1719,25 @@
       document.getElementById("loadingOverlay").classList.remove("hidden");
       
       try {
-        // Periksa apakah Firebase sudah diinisialisasi
-        if (!window.firebaseDb) {
-          throw new Error("Firebase belum diinisialisasi");
+        // Tunggu hingga Firebase benar-benar terinisialisasi
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        while (!window.firebaseDb && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
+          console.log(`Menunggu Firebase inisialisasi... percobaan ${attempts + 1}`);
         }
+        
+        if (!window.firebaseDb) {
+          throw new Error("Firebase tidak dapat diinisialisasi. Silakan refresh halaman dan coba lagi.");
+        }
+        
+        console.log("Firebase siap digunakan");
         
         // Data transaksi yang benar
         const transactionData = {
-          username: username,  // Pastikan ini adalah username yang benar
+          username: username,
           phoneNumber: `${selectedCountry.code}${phoneNumber}`,
           robuxAmount: selectedPackageData.robux,
           price: selectedPackageData.price,
@@ -1706,8 +1756,31 @@
         // Debug: Tampilkan data yang akan disimpan
         console.log("Data yang akan disimpan:", transactionData);
         
-        // Save transaction to Firebase
-        const docRef = await addDoc(collection(window.firebaseDb, 'transactions'), transactionData);
+        // Coba simpan ke Firebase dengan retry mechanism
+        let docRef = null;
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (!docRef && retryCount < maxRetries) {
+          try {
+            docRef = await addDoc(collection(window.firebaseDb, 'transactions'), transactionData);
+            console.log("Transaksi berhasil disimpan dengan ID:", docRef.id);
+          } catch (firebaseError) {
+            retryCount++;
+            console.error(`Percobaan ${retryCount} gagal:`, firebaseError);
+            
+            if (retryCount >= maxRetries) {
+              throw firebaseError;
+            }
+            
+            // Tunggu sebelum mencoba lagi
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+        
+        if (!docRef) {
+          throw new Error("Gagal menyimpan transaksi setelah beberapa percobaan");
+        }
         
         // Simpan ke localStorage untuk halaman pembayaran
         const localTransaction = {
@@ -1726,8 +1799,21 @@
         // Hide loading overlay
         document.getElementById("loadingOverlay").classList.add("hidden");
         
+        // Tunggu sebentar sebelum redirect untuk memastikan semua operasi selesai
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Redirect ke halaman pembayaran
-        window.location.href = `pembayaran-marstorekita.html?id=${docRef.id}`;
+        console.log("Mengarahkan ke halaman pembayaran...");
+        
+        // Coba gunakan window.location.replace untuk mengganti riwayat browser
+        window.location.replace(`pembayaran-marstorekita.html?id=${docRef.id}`);
+        
+        // Fallback jika replace tidak bekerja
+        setTimeout(() => {
+          if (document.getElementById("loadingOverlay").classList.contains("hidden")) {
+            window.location.href = `pembayaran-marstorekita.html?id=${docRef.id}`;
+          }
+        }, 1000);
         
       } catch (error) {
         console.error('Error creating transaction:', error);
@@ -1735,12 +1821,14 @@
         
         let errorMessage = "Terjadi kesalahan. Silakan coba lagi.";
         
-        if (error.message === "Firebase belum diinisialisasi") {
-          errorMessage = "Koneksi ke server gagal. Periksa koneksi internet Anda.";
+        if (error.message === "Firebase tidak dapat diinisialisasi. Silakan refresh halaman dan coba lagi.") {
+          errorMessage = error.message;
         } else if (error.code === "permission-denied") {
           errorMessage = "Izin akses ditolak. Silakan coba lagi nanti.";
         } else if (error.code === "unavailable") {
           errorMessage = "Layanan tidak tersedia saat ini. Silakan coba lagi nanti.";
+        } else if (error.message.includes("Failed to get document")) {
+          errorMessage = "Gagal menyimpan data ke server. Periksa koneksi internet Anda.";
         }
         
         showErrorModal(errorMessage);
