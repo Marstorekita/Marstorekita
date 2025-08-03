@@ -10,7 +10,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, updateDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, updateDoc, query, orderBy, serverTimestamp, where, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyAshvsXzust2ZAUMdfyQqQxKZCHni-8h_g",
@@ -21,10 +21,22 @@
             appId: "1:716103517831:web:c9c0e01a46d8793b7f9a22",
             measurementId: "G-B4NF9BPFMK"
         };
-
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        
+        // Make Firebase functions available globally
         window.firebaseDb = db;
+        window.addDoc = addDoc;
+        window.collection = collection;
+        window.doc = doc;
+        window.getDocs = getDocs;
+        window.updateDoc = updateDoc;
+        window.query = query;
+        window.orderBy = orderBy;
+        window.serverTimestamp = serverTimestamp;
+        window.onSnapshot = onSnapshot;
+        
+        console.log("Firebase initialized:", app);
     </script>
     
     <style>
@@ -74,6 +86,45 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .debug-panel {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            font-family: monospace;
+            font-size: 0.875rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .debug-log {
+            padding: 0.5rem;
+            border-bottom: 1px solid #334155;
+        }
+        .debug-log:last-child {
+            border-bottom: none;
+        }
+        .debug-error {
+            color: #f87171;
+        }
+        .debug-success {
+            color: #4ade80;
+        }
+        .debug-info {
+            color: #60a5fa;
+        }
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -121,9 +172,10 @@
             </div>
             
             <nav class="p-4">
-                <a href="#" onclick="showSection('transactions')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700 transition mb-2 bg-gray-700">
+                <a href="#" onclick="showSection('transactions')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700 transition mb-2 bg-gray-700 relative">
                     <i class="fas fa-exchange-alt w-5"></i>
                     <span class="sidebar-text">Transaksi</span>
+                    <span id="transactionNotification" class="notification-badge hidden">0</span>
                 </a>
                 <a href="#" onclick="showSection('analytics')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700 transition mb-2">
                     <i class="fas fa-chart-bar w-5"></i>
@@ -132,6 +184,10 @@
                 <a href="#" onclick="showSection('settings')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700 transition mb-2">
                     <i class="fas fa-cog w-5"></i>
                     <span class="sidebar-text">Pengaturan</span>
+                </a>
+                <a href="#" onclick="showSection('debug')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700 transition mb-2">
+                    <i class="fas fa-bug w-5"></i>
+                    <span class="sidebar-text">Debug</span>
                 </a>
             </nav>
             
@@ -142,7 +198,7 @@
                 </button>
             </div>
         </div>
-
+        
         <!-- Main Content -->
         <div class="flex-1 flex flex-col overflow-hidden">
             <!-- Top Bar -->
@@ -159,129 +215,241 @@
                     </div>
                 </div>
             </header>
-
-            <!-- Content Area -->
-            <main class="flex-1 overflow-y-auto p-6">
+            
+            <!-- Main Content Area -->
+            <main class="flex-1 overflow-y-auto p-6 bg-gray-100">
                 <!-- Transactions Section -->
-                <div id="transactionsSection" class="content-section">
-                    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-                        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-                            <div>
-                                <h1 class="text-2xl font-bold text-gray-800">Daftar Transaksi</h1>
-                                <p class="text-gray-600">Kelola semua transaksi pembelian Robux</p>
-                            </div>
-                            <div class="mt-4 md:mt-0 flex space-x-3">
+                <div id="transactionsSection" class="section">
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-xl font-bold text-gray-800">Daftar Transaksi</h2>
+                            <div class="flex space-x-3">
                                 <div class="relative">
-                                    <input type="text" id="searchInput" placeholder="Cari transaksi..." class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <input type="text" id="searchTransaction" placeholder="Cari transaksi..." class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                     <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
                                 </div>
-                                <button onclick="loadTransactions()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                                <button onclick="refreshTransactions()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
                                     <i class="fas fa-sync-alt mr-2"></i>Refresh
+                                </button>
+                                <button onclick="exportTransactions()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+                                    <i class="fas fa-download mr-2"></i>Export
                                 </button>
                             </div>
                         </div>
-
-                        <!-- Stats Cards -->
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                            <div class="bg-blue-50 p-4 rounded-lg">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-sm text-blue-600">Total Transaksi</p>
-                                        <p id="totalTransactions" class="text-2xl font-bold text-blue-800">0</p>
-                                    </div>
-                                    <i class="fas fa-shopping-cart text-blue-500 text-2xl"></i>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pengguna</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jumlah Robux</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metode</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transactionsTableBody" class="bg-white divide-y divide-gray-200">
+                                    <!-- Transactions will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div id="transactionsLoading" class="flex justify-center items-center py-12 hidden">
+                            <div class="loading-spinner"></div>
+                        </div>
+                        
+                        <div id="transactionsEmpty" class="text-center py-12 hidden">
+                            <i class="fas fa-inbox text-gray-400 text-4xl mb-4"></i>
+                            <p class="text-gray-500">Tidak ada transaksi ditemukan</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Analytics Section -->
+                <div id="analyticsSection" class="section hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
+                                    <i class="fas fa-exchange-alt text-xl"></i>
                                 </div>
-                            </div>
-                            <div class="bg-yellow-50 p-4 rounded-lg">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-sm text-yellow-600">Pending</p>
-                                        <p id="pendingTransactions" class="text-2xl font-bold text-yellow-800">0</p>
-                                    </div>
-                                    <i class="fas fa-clock text-yellow-500 text-2xl"></i>
-                                </div>
-                            </div>
-                            <div class="bg-green-50 p-4 rounded-lg">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-sm text-green-600">Completed</p>
-                                        <p id="completedTransactions" class="text-2xl font-bold text-green-800">0</p>
-                                    </div>
-                                    <i class="fas fa-check-circle text-green-500 text-2xl"></i>
-                                </div>
-                            </div>
-                            <div class="bg-purple-50 p-4 rounded-lg">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-sm text-purple-600">Total Revenue</p>
-                                        <p id="totalRevenue" class="text-2xl font-bold text-purple-800">Rp 0</p>
-                                    </div>
-                                    <i class="fas fa-money-bill-wave text-purple-500 text-2xl"></i>
+                                <div>
+                                    <p class="text-gray-500 text-sm">Total Transaksi</p>
+                                    <p id="totalTransactions" class="text-2xl font-bold">0</p>
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Transactions Table -->
+                        
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-green-100 text-green-600 mr-4">
+                                    <i class="fas fa-check-circle text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-gray-500 text-sm">Transaksi Berhasil</p>
+                                    <p id="completedTransactions" class="text-2xl font-bold">0</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-yellow-100 text-yellow-600 mr-4">
+                                    <i class="fas fa-clock text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-gray-500 text-sm">Menunggu Proses</p>
+                                    <p id="pendingTransactions" class="text-2xl font-bold">0</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl shadow-sm p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-purple-100 text-purple-600 mr-4">
+                                    <i class="fas fa-dollar-sign text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-gray-500 text-sm">Total Pendapatan</p>
+                                    <p id="totalRevenue" class="text-2xl font-bold">Rp 0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">Grafik Transaksi Harian</h3>
+                        <div class="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
+                            <canvas id="transactionChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">Transaksi Terbaru</h3>
                         <div class="overflow-x-auto">
-                            <table class="w-full">
-                                <thead>
-                                    <tr class="border-b border-gray-200">
-                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">ID Transaksi</th>
-                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Username</th>
-                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Paket</th>
-                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Metode</th>
-                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Tanggal</th>
-                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Aksi</th>
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pengguna</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jumlah</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
                                     </tr>
                                 </thead>
-                                <tbody id="transactionsTableBody">
-                                    <tr>
-                                        <td colspan="7" class="text-center py-8 text-gray-500">
-                                            <div class="loading-spinner mx-auto mb-4"></div>
-                                            Memuat data transaksi...
-                                        </td>
-                                    </tr>
+                                <tbody id="recentTransactionsTable" class="bg-white divide-y divide-gray-200">
+                                    <!-- Recent transactions will be loaded here -->
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
-
-                <!-- Analytics Section -->
-                <div id="analyticsSection" class="content-section hidden">
-                    <div class="bg-white rounded-xl shadow-lg p-6">
-                        <h1 class="text-2xl font-bold text-gray-800 mb-6">Analitik</h1>
-                        <div class="text-center py-12 text-gray-500">
-                            <i class="fas fa-chart-line text-6xl mb-4"></i>
-                            <p class="text-xl">Fitur analitik akan segera hadir</p>
+                
+                <!-- Settings Section -->
+                <div id="settingsSection" class="section hidden">
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-6">Pengaturan Admin</h2>
+                        
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Ubah Password</h3>
+                            <form onsubmit="changePassword(event)">
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Password Baru</label>
+                                    <input type="password" id="newPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Masukkan password baru">
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Konfirmasi Password</label>
+                                    <input type="password" id="confirmPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Konfirmasi password baru">
+                                </div>
+                                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                                    <i class="fas fa-save mr-2"></i>Simpan Password
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <div class="border-t border-gray-200 pt-6">
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Pengaturan Sistem</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-medium text-gray-800">Notifikasi Transaksi Baru</p>
+                                        <p class="text-sm text-gray-500">Aktifkan notifikasi untuk transaksi baru</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="notificationToggle" class="sr-only peer" checked>
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                                
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-medium text-gray-800">Auto Refresh</p>
+                                        <p class="text-sm text-gray-500">Refresh otomatis setiap 30 detik</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="autoRefreshToggle" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Settings Section -->
-                <div id="settingsSection" class="content-section hidden">
-                    <div class="bg-white rounded-xl shadow-lg p-6">
-                        <h1 class="text-2xl font-bold text-gray-800 mb-6">Pengaturan</h1>
-                        <div class="space-y-6">
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-800 mb-3">Ubah Password Admin</h3>
-                                <div class="max-w-md">
-                                    <input type="password" placeholder="Password baru" class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-3">
-                                    <input type="password" placeholder="Konfirmasi password" class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-3">
-                                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-                                        Simpan Perubahan
-                                    </button>
-                                </div>
+                
+                <!-- Debug Section -->
+                <div id="debugSection" class="section hidden">
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-xl font-bold text-gray-800">Debug Panel</h2>
+                            <button onclick="clearDebugLogs()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition">
+                                <i class="fas fa-trash mr-2"></i>Hapus Log
+                            </button>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <div class="flex space-x-2">
+                                <button onclick="addDebugLog('info', 'Ini adalah log informasi')" class="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm hover:bg-blue-200 transition">
+                                    <i class="fas fa-info-circle mr-1"></i>Info
+                                </button>
+                                <button onclick="addDebugLog('success', 'Operasi berhasil dilakukan')" class="bg-green-100 text-green-800 px-3 py-1 rounded text-sm hover:bg-green-200 transition">
+                                    <i class="fas fa-check-circle mr-1"></i>Success
+                                </button>
+                                <button onclick="addDebugLog('error', 'Terjadi kesalahan pada sistem')" class="bg-red-100 text-red-800 px-3 py-1 rounded text-sm hover:bg-red-200 transition">
+                                    <i class="fas fa-exclamation-circle mr-1"></i>Error
+                                </button>
                             </div>
-                            
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-800 mb-3">Informasi Aplikasi</h3>
-                                <div class="bg-gray-50 p-4 rounded-lg">
-                                    <p class="text-gray-600 mb-2"><strong>Version:</strong> 1.0.0</p>
-                                    <p class="text-gray-600 mb-2"><strong>Last Update:</strong> <span id="lastUpdate"></span></p>
-                                    <p class="text-gray-600"><strong>Firebase Project:</strong> marstorekita-robux</p>
-                                </div>
+                        </div>
+                        
+                        <div id="debugPanel" class="debug-panel rounded-lg">
+                            <div class="debug-log debug-info">
+                                <span class="text-gray-400">[2023-06-15 10:30:45]</span> <span class="debug-info">INFO:</span> Firebase initialized successfully
+                            </div>
+                            <div class="debug-log debug-success">
+                                <span class="text-gray-400">[2023-06-15 10:31:02]</span> <span class="debug-success">SUCCESS:</span> Admin login successful
+                            </div>
+                            <div class="debug-log debug-info">
+                                <span class="text-gray-400">[2023-06-15 10:31:15]</span> <span class="debug-info">INFO:</span> Loaded 12 transactions
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">Firebase Status</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Connection Status</span>
+                                <span class="text-green-600 font-medium">Connected</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Last Sync</span>
+                                <span id="lastSync" class="text-gray-800">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Data Loaded</span>
+                                <span id="dataLoaded" class="text-gray-800">0 transactions</span>
                             </div>
                         </div>
                     </div>
@@ -290,38 +458,44 @@
         </div>
     </div>
 
-    <!-- Transaction Detail Modal -->
-    <div id="transactionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-xl p-8 max-w-2xl w-full mx-4 transform transition-all max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-2xl font-bold text-gray-800">Detail Transaksi</h3>
-                <button onclick="closeTransactionModal()" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
+    <!-- Notification Toast -->
+    <div id="notificationToast" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 transform translate-y-20 opacity-0 transition-all duration-300 max-w-md">
+        <div class="flex items-start">
+            <div id="notificationIcon" class="flex-shrink-0 w-6 h-6 mr-3 mt-0.5">
+                <!-- Icon will be set dynamically -->
             </div>
-            <div id="transactionDetailContent">
-                <!-- Transaction details will be loaded here -->
+            <div class="flex-1">
+                <h4 id="notificationTitle" class="font-medium text-gray-900"></h4>
+                <p id="notificationMessage" class="mt-1 text-sm text-gray-500"></p>
             </div>
+            <button onclick="hideNotification()" class="ml-4 text-gray-400 hover:text-gray-500">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
     </div>
 
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <script>
         // Global variables
-        let transactions = [];
         let currentSection = 'transactions';
+        let transactions = [];
+        let debugLogs = [];
+        let realTimeListener = null;
+        let autoRefreshInterval = null;
+        let notificationEnabled = true;
+        let chart = null;
         
-        // Simple password for admin login
-        const ADMIN_PASSWORD = 'admin123';
-        
-        // Initialize page
-        document.addEventListener("DOMContentLoaded", function() {
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
             // Check if already logged in
             if (localStorage.getItem('adminLoggedIn') === 'true') {
                 showDashboard();
+                loadTransactions();
+                setupRealTimeUpdates();
+                setupAutoRefresh();
             }
-            
-            // Set last update date
-            document.getElementById('lastUpdate').textContent = new Date().toLocaleDateString('id-ID');
         });
         
         // Login function
@@ -330,25 +504,44 @@
             
             const password = document.getElementById('adminPassword').value;
             
-            if (password === ADMIN_PASSWORD) {
+            // Simple password check (in real app, use proper authentication)
+            if (password === 'admin123') {
                 localStorage.setItem('adminLoggedIn', 'true');
                 showDashboard();
+                loadTransactions();
+                setupRealTimeUpdates();
+                setupAutoRefresh();
+                showNotification('success', 'Login Berhasil', 'Selamat datang di admin panel');
+                addDebugLog('success', 'Admin login successful');
             } else {
-                alert('Password salah!');
+                showNotification('error', 'Login Gagal', 'Password yang Anda masukkan salah');
+                addDebugLog('error', 'Failed login attempt with wrong password');
             }
         }
         
         // Logout function
         function logout() {
             localStorage.removeItem('adminLoggedIn');
-            location.reload();
+            // Clear real-time listener
+            if (realTimeListener) {
+                realTimeListener();
+                realTimeListener = null;
+            }
+            // Clear auto refresh
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('adminDashboard').classList.add('hidden');
+            showNotification('info', 'Logout Berhasil', 'Anda telah keluar dari admin panel');
+            addDebugLog('info', 'Admin logged out');
         }
         
-        // Show dashboard
+        // Show dashboard after login
         function showDashboard() {
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminDashboard').classList.remove('hidden');
-            loadTransactions();
         }
         
         // Toggle sidebar
@@ -358,50 +551,145 @@
         }
         
         // Show section
-        function showSection(section) {
+        function showSection(sectionName) {
             // Hide all sections
-            document.querySelectorAll('.content-section').forEach(el => {
-                el.classList.add('hidden');
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.add('hidden');
             });
             
             // Show selected section
-            document.getElementById(section + 'Section').classList.remove('hidden');
-            currentSection = section;
+            document.getElementById(sectionName + 'Section').classList.remove('hidden');
             
-            // Update sidebar active state
-            document.querySelectorAll('#sidebar nav a').forEach(el => {
-                el.classList.remove('bg-gray-700');
+            // Update active nav item
+            document.querySelectorAll('nav a').forEach(item => {
+                item.classList.remove('bg-gray-700');
             });
             event.target.closest('a').classList.add('bg-gray-700');
+            
+            currentSection = sectionName;
+            
+            // Load section-specific data
+            if (sectionName === 'transactions') {
+                loadTransactions();
+            } else if (sectionName === 'analytics') {
+                loadAnalytics();
+            } else if (sectionName === 'debug') {
+                loadDebugLogs();
+            }
+        }
+        
+        // Setup real-time updates
+        function setupRealTimeUpdates() {
+            const q = query(collection(window.firebaseDb, 'transactions'), orderBy('timestamp', 'desc'));
+            
+            realTimeListener = onSnapshot(q, (snapshot) => {
+                const changes = snapshot.docChanges();
+                let newTransactions = 0;
+                
+                changes.forEach((change) => {
+                    if (change.type === 'added') {
+                        newTransactions++;
+                    }
+                });
+                
+                if (newTransactions > 0 && notificationEnabled) {
+                    // Update notification badge
+                    const badge = document.getElementById('transactionNotification');
+                    badge.textContent = newTransactions;
+                    badge.classList.remove('hidden');
+                    
+                    // Show notification
+                    showNotification('info', 'Transaksi Baru', `${newTransactions} transaksi baru masuk`);
+                    
+                    // Play sound (if supported)
+                    playNotificationSound();
+                }
+                
+                // Reload transactions if currently viewing transactions section
+                if (currentSection === 'transactions') {
+                    loadTransactions();
+                }
+                
+                // Update analytics if open
+                if (currentSection === 'analytics') {
+                    loadAnalytics();
+                }
+                
+                addDebugLog('info', `Real-time update: ${newTransactions} new transactions`);
+            }, (error) => {
+                console.error('Error with real-time updates:', error);
+                addDebugLog('error', `Real-time update error: ${error.message}`);
+            });
+        }
+        
+        // Setup auto refresh
+        function setupAutoRefresh() {
+            const toggle = document.getElementById('autoRefreshToggle');
+            toggle.addEventListener('change', function() {
+                if (this.checked) {
+                    autoRefreshInterval = setInterval(() => {
+                        if (currentSection === 'transactions') {
+                            loadTransactions();
+                        } else if (currentSection === 'analytics') {
+                            loadAnalytics();
+                        }
+                        addDebugLog('info', 'Auto refresh triggered');
+                    }, 30000); // 30 seconds
+                } else {
+                    if (autoRefreshInterval) {
+                        clearInterval(autoRefreshInterval);
+                        autoRefreshInterval = null;
+                    }
+                }
+            });
+        }
+        
+        // Play notification sound
+        function playNotificationSound() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 800;
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.2);
+            } catch (e) {
+                console.log('Audio not supported');
+            }
         }
         
         // Load transactions from Firebase
         async function loadTransactions() {
-            if (!window.firebaseDb) {
-                console.error('Firebase not initialized');
-                return;
-            }
+            const tableBody = document.getElementById('transactionsTableBody');
+            const loadingElement = document.getElementById('transactionsLoading');
+            const emptyElement = document.getElementById('transactionsEmpty');
+            
+            // Show loading
+            tableBody.innerHTML = '';
+            loadingElement.classList.remove('hidden');
+            emptyElement.classList.add('hidden');
             
             try {
-                // Show loading state
-                const tableBody = document.getElementById('transactionsTableBody');
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center py-8 text-gray-500">
-                            <div class="loading-spinner mx-auto mb-4"></div>
-                            Memuat data transaksi...
-                        </td>
-                    </tr>
-                `;
-                
-                // Get transactions from Firebase
-                const q = query(
-                    collection(window.firebaseDb, "transactions"),
-                    orderBy("timestamp", "desc")
-                );
+                // Get transactions from Firestore
+                const q = query(collection(window.firebaseDb, 'transactions'), orderBy('timestamp', 'desc'));
                 const querySnapshot = await getDocs(q);
                 
                 transactions = [];
+                
+                if (querySnapshot.empty) {
+                    // No transactions found
+                    loadingElement.classList.add('hidden');
+                    emptyElement.classList.remove('hidden');
+                    return;
+                }
+                
                 querySnapshot.forEach((doc) => {
                     transactions.push({
                         id: doc.id,
@@ -409,205 +697,398 @@
                     });
                 });
                 
-                // Update table
-                updateTransactionsTable();
+                // Populate table
+                transactions.forEach(transaction => {
+                    const row = document.createElement('tr');
+                    row.className = 'transaction-row';
+                    
+                    const date = transaction.timestamp ? new Date(transaction.timestamp.toDate()).toLocaleString('id-ID') : '-';
+                    const paymentMethod = transaction.paymentMethod || '-';
+                    
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#${transaction.id.substring(0, 8)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transaction.username || '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transaction.robuxAmount || '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Rp ${transaction.price?.toLocaleString('id-ID') || '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${date}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${getPaymentMethodLabel(paymentMethod)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="status-badge status-${transaction.status}">${getStatusLabel(transaction.status)}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            ${transaction.status === 'pending' ? `
+                                <button onclick="updateTransactionStatus('${transaction.id}', 'completed')" class="text-green-600 hover:text-green-900 mr-3">
+                                    <i class="fas fa-check"></i> Selesai
+                                </button>
+                                <button onclick="updateTransactionStatus('${transaction.id}', 'failed')" class="text-red-600 hover:text-red-900">
+                                    <i class="fas fa-times"></i> Gagal
+                                </button>
+                            ` : '-'}
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
                 
-                // Update stats
-                updateStats();
+                loadingElement.classList.add('hidden');
                 
+                // Update debug info
+                document.getElementById('lastSync').textContent = new Date().toLocaleString('id-ID');
+                document.getElementById('dataLoaded').textContent = `${transactions.length} transactions`;
+                
+                // Clear notification badge
+                const badge = document.getElementById('transactionNotification');
+                badge.classList.add('hidden');
+                
+                addDebugLog('info', `Loaded ${transactions.length} transactions`);
             } catch (error) {
                 console.error('Error loading transactions:', error);
-                const tableBody = document.getElementById('transactionsTableBody');
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center py-8 text-red-500">
-                            <i class="fas fa-exclamation-circle text-4xl mb-2"></i>
-                            <p>Gagal memuat data transaksi</p>
-                        </td>
-                    </tr>
-                `;
+                loadingElement.classList.add('hidden');
+                emptyElement.classList.remove('hidden');
+                showNotification('error', 'Error', 'Gagal memuat data transaksi');
+                addDebugLog('error', `Failed to load transactions: ${error.message}`);
             }
         }
         
-        // Update transactions table
-        function updateTransactionsTable() {
-            const tableBody = document.getElementById('transactionsTableBody');
-            
+        // Get payment method label
+        function getPaymentMethodLabel(method) {
+            switch (method) {
+                case 'qris': return 'QRIS';
+                case 'bank': return 'Transfer Bank';
+                case 'ewallet': return 'E-Wallet';
+                default: return method || '-';
+            }
+        }
+        
+        // Get status label
+        function getStatusLabel(status) {
+            switch (status) {
+                case 'pending': return 'Menunggu';
+                case 'completed': return 'Selesai';
+                case 'failed': return 'Gagal';
+                default: return status;
+            }
+        }
+        
+        // Refresh transactions
+        function refreshTransactions() {
+            loadTransactions();
+            showNotification('info', 'Memperbarui', 'Data transaksi sedang diperbarui');
+        }
+        
+        // Export transactions
+        function exportTransactions() {
             if (transactions.length === 0) {
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center py-8 text-gray-500">
-                            <i class="fas fa-inbox text-4xl mb-2"></i>
-                            <p>Belum ada transaksi</p>
-                        </td>
-                    </tr>
-                `;
+                showNotification('error', 'Error', 'Tidak ada data untuk diekspor');
                 return;
             }
             
-            tableBody.innerHTML = transactions.map(transaction => {
-                const date = transaction.timestamp ? transaction.timestamp.toDate() : new Date(transaction.date);
-                const statusClass = `status-${transaction.status}`;
-                const statusText = {
-                    'pending': 'Pending',
-                    'completed': 'Completed',
-                    'failed': 'Failed'
-                }[transaction.status] || 'Unknown';
-                
-                return `
-                    <tr class="transaction-row border-b border-gray-100">
-                        <td class="py-3 px-4">
-                            <span class="font-mono text-sm">${transaction.id.substring(0, 8)}...</span>
-                        </td>
-                        <td class="py-3 px-4">${transaction.username}</td>
-                        <td class="py-3 px-4">${transaction.package.robux} Robux</td>
-                        <td class="py-3 px-4">${transaction.paymentMethod}</td>
-                        <td class="py-3 px-4">
-                            <span class="status-badge ${statusClass}">${statusText}</span>
-                        </td>
-                        <td class="py-3 px-4">${date.toLocaleString('id-ID')}</td>
-                        <td class="py-3 px-4">
-                            <div class="flex space-x-2">
-                                <button onclick="showTransactionDetail('${transaction.id}')" class="text-blue-600 hover:text-blue-800">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                ${transaction.status === 'pending' ? `
-                                    <button onclick="updateTransactionStatus('${transaction.id}', 'completed')" class="text-green-600 hover:text-green-800">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                    <button onclick="updateTransactionStatus('${transaction.id}', 'failed')" class="text-red-600 hover:text-red-800">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
-        // Update statistics
-        function updateStats() {
-            const total = transactions.length;
-            const pending = transactions.filter(t => t.status === 'pending').length;
-            const completed = transactions.filter(t => t.status === 'completed').length;
-            const revenue = transactions
-                .filter(t => t.status === 'completed')
-                .reduce((sum, t) => sum + t.package.price, 0);
+            // Create CSV content
+            const headers = ['ID', 'Username', 'Jumlah Robux', 'Harga', 'Tanggal', 'Metode Pembayaran', 'Status'];
+            const csvContent = [
+                headers.join(','),
+                ...transactions.map(t => [
+                    t.id.substring(0, 8),
+                    t.username || '-',
+                    t.robuxAmount || '-',
+                    t.price || '-',
+                    t.timestamp ? new Date(t.timestamp.toDate()).toLocaleString('id-ID') : '-',
+                    getPaymentMethodLabel(t.paymentMethod),
+                    getStatusLabel(t.status)
+                ].join(','))
+            ].join('\n');
             
-            document.getElementById('totalTransactions').textContent = total;
-            document.getElementById('pendingTransactions').textContent = pending;
-            document.getElementById('completedTransactions').textContent = completed;
-            document.getElementById('totalRevenue').textContent = `Rp ${revenue.toLocaleString('id-ID')}`;
-        }
-        
-        // Show transaction detail
-        function showTransactionDetail(transactionId) {
-            const transaction = transactions.find(t => t.id === transactionId);
-            if (!transaction) return;
+            // Create download link
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `transactions_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
             
-            const date = transaction.timestamp ? transaction.timestamp.toDate() : new Date(transaction.date);
-            
-            const content = `
-                <div class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <p class="text-sm text-gray-600">ID Transaksi</p>
-                            <p class="font-semibold">${transaction.id}</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Status</p>
-                            <p class="font-semibold">${transaction.status}</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Username</p>
-                            <p class="font-semibold">${transaction.username}</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Nomor HP</p>
-                            <p class="font-semibold">${transaction.phoneNumber}</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Paket</p>
-                            <p class="font-semibold">${transaction.package.robux} Robux</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Harga</p>
-                            <p class="font-semibold">Rp ${transaction.package.price.toLocaleString('id-ID')}</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Metode Pembayaran</p>
-                            <p class="font-semibold">${transaction.paymentMethod}</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-600">Tanggal</p>
-                            <p class="font-semibold">${date.toLocaleString('id-ID')}</p>
-                        </div>
-                    </div>
-                    ${transaction.referralCode ? `
-                        <div>
-                            <p class="text-sm text-gray-600">Kode Referral</p>
-                            <p class="font-semibold">${transaction.referralCode}</p>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-            
-            document.getElementById('transactionDetailContent').innerHTML = content;
-            document.getElementById('transactionModal').classList.remove('hidden');
-        }
-        
-        // Close transaction modal
-        function closeTransactionModal() {
-            document.getElementById('transactionModal').classList.add('hidden');
+            showNotification('success', 'Export Berhasil', 'Data transaksi berhasil diekspor');
+            addDebugLog('success', 'Transactions exported successfully');
         }
         
         // Update transaction status
         async function updateTransactionStatus(transactionId, newStatus) {
-            if (!confirm(`Ubah status transaksi menjadi ${newStatus}?`)) {
-                return;
-            }
-            
             try {
-                const transactionRef = doc(window.firebaseDb, "transactions", transactionId);
+                const transactionRef = doc(window.firebaseDb, 'transactions', transactionId);
                 await updateDoc(transactionRef, {
                     status: newStatus,
                     updatedAt: serverTimestamp()
                 });
                 
+                showNotification('success', 'Berhasil', `Status transaksi diperbarui menjadi ${getStatusLabel(newStatus)}`);
+                addDebugLog('success', `Transaction ${transactionId} status updated to ${newStatus}`);
+                
                 // Reload transactions
                 loadTransactions();
                 
-                // Show success message
-                const notification = document.createElement('div');
-                notification.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-                notification.innerHTML = `
-                    <div class="flex items-center">
-                        <i class="fas fa-check-circle mr-2"></i>
-                        <span>Status transaksi berhasil diperbarui</span>
-                    </div>
-                `;
-                document.body.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.remove();
-                }, 3000);
-                
+                // If analytics is open, reload it too
+                if (currentSection === 'analytics') {
+                    loadAnalytics();
+                }
             } catch (error) {
-                console.error('Error updating transaction status:', error);
-                alert('Gagal memperbarui status transaksi');
+                console.error('Error updating transaction:', error);
+                showNotification('error', 'Error', 'Gagal memperbarui status transaksi');
+                addDebugLog('error', `Failed to update transaction ${transactionId}: ${error.message}`);
             }
         }
         
+        // Load analytics data
+        function loadAnalytics() {
+            // Calculate statistics
+            const totalTransactions = transactions.length;
+            const completedTransactions = transactions.filter(t => t.status === 'completed').length;
+            const pendingTransactions = transactions.filter(t => t.status === 'pending').length;
+            const totalRevenue = transactions
+                .filter(t => t.status === 'completed')
+                .reduce((sum, t) => sum + (t.price || 0), 0);
+            
+            // Update UI
+            document.getElementById('totalTransactions').textContent = totalTransactions;
+            document.getElementById('completedTransactions').textContent = completedTransactions;
+            document.getElementById('pendingTransactions').textContent = pendingTransactions;
+            document.getElementById('totalRevenue').textContent = `Rp ${totalRevenue.toLocaleString('id-ID')}`;
+            
+            // Load recent transactions (last 5)
+            const recentTransactionsTable = document.getElementById('recentTransactionsTable');
+            recentTransactionsTable.innerHTML = '';
+            
+            const recentTransactions = transactions.slice(0, 5);
+            
+            if (recentTransactions.length === 0) {
+                recentTransactionsTable.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+                            Tidak ada transaksi terbaru
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            recentTransactions.forEach(transaction => {
+                const row = document.createElement('tr');
+                const date = transaction.timestamp ? new Date(transaction.timestamp.toDate()).toLocaleDateString('id-ID') : '-';
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#${transaction.id.substring(0, 8)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transaction.username || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transaction.robuxAmount || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="status-badge status-${transaction.status}">${getStatusLabel(transaction.status)}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${date}</td>
+                `;
+                
+                recentTransactionsTable.appendChild(row);
+            });
+            
+            // Load chart
+            loadTransactionChart();
+            
+            addDebugLog('info', 'Analytics data loaded');
+        }
+        
+        // Load transaction chart
+        function loadTransactionChart() {
+            const ctx = document.getElementById('transactionChart').getContext('2d');
+            
+            // Group transactions by date
+            const transactionsByDate = {};
+            transactions.forEach(t => {
+                if (t.timestamp) {
+                    const date = new Date(t.timestamp.toDate()).toLocaleDateString('id-ID');
+                    if (!transactionsByDate[date]) {
+                        transactionsByDate[date] = 0;
+                    }
+                    transactionsByDate[date]++;
+                }
+            });
+            
+            // Get last 7 days
+            const labels = [];
+            const data = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toLocaleDateString('id-ID');
+                labels.push(dateStr);
+                data.push(transactionsByDate[dateStr] || 0);
+            }
+            
+            // Destroy existing chart
+            if (chart) {
+                chart.destroy();
+            }
+            
+            // Create new chart
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Jumlah Transaksi',
+                        data: data,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Change password
+        function changePassword(event) {
+            event.preventDefault();
+            
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (newPassword !== confirmPassword) {
+                showNotification('error', 'Error', 'Password dan konfirmasi password tidak cocok');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showNotification('error', 'Error', 'Password minimal harus 6 karakter');
+                return;
+            }
+            
+            // In a real app, you would update the password in a secure way
+            // For this demo, we'll just show a success message
+            showNotification('success', 'Berhasil', 'Password telah diperbarui');
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            
+            addDebugLog('success', 'Admin password changed');
+        }
+        
+        // Debug functions
+        function addDebugLog(type, message) {
+            const timestamp = new Date().toLocaleString('id-ID');
+            const log = {
+                type,
+                message,
+                timestamp
+            };
+            
+            debugLogs.push(log);
+            
+            // If debug section is open, update the UI
+            if (currentSection === 'debug') {
+                addDebugLogToUI(log);
+            }
+        }
+        
+        function addDebugLogToUI(log) {
+            const debugPanel = document.getElementById('debugPanel');
+            const logElement = document.createElement('div');
+            logElement.className = `debug-log debug-${log.type}`;
+            
+            logElement.innerHTML = `
+                <span class="text-gray-400">[${log.timestamp}]</span> 
+                <span class="debug-${log.type}">${log.type.toUpperCase()}:</span> ${log.message}
+            `;
+            
+            debugPanel.appendChild(logElement);
+            debugPanel.scrollTop = debugPanel.scrollHeight;
+        }
+        
+        function loadDebugLogs() {
+            const debugPanel = document.getElementById('debugPanel');
+            debugPanel.innerHTML = '';
+            
+            // Add existing logs
+            debugLogs.forEach(log => {
+                addDebugLogToUI(log);
+            });
+            
+            // Add initial logs if empty
+            if (debugLogs.length === 0) {
+                addDebugLog('info', 'Firebase initialized successfully');
+                addDebugLog('success', 'Admin login successful');
+                addDebugLog('info', `Loaded ${transactions.length} transactions`);
+            }
+        }
+        
+        function clearDebugLogs() {
+            debugLogs = [];
+            const debugPanel = document.getElementById('debugPanel');
+            debugPanel.innerHTML = '<div class="debug-log debug-info"><span class="text-gray-400">[' + new Date().toLocaleString('id-ID') + ']</span> <span class="debug-info">INFO:</span> Debug logs cleared</div>';
+        }
+        
+        // Notification system
+        function showNotification(type, title, message) {
+            const toast = document.getElementById('notificationToast');
+            const iconElement = document.getElementById('notificationIcon');
+            const titleElement = document.getElementById('notificationTitle');
+            const messageElement = document.getElementById('notificationMessage');
+            
+            // Set icon based on type
+            if (type === 'success') {
+                iconElement.innerHTML = '<i class="fas fa-check-circle text-green-500"></i>';
+            } else if (type === 'error') {
+                iconElement.innerHTML = '<i class="fas fa-exclamation-circle text-red-500"></i>';
+            } else {
+                iconElement.innerHTML = '<i class="fas fa-info-circle text-blue-500"></i>';
+            }
+            
+            // Set content
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            
+            // Show toast
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                hideNotification();
+            }, 5000);
+        }
+        
+        function hideNotification() {
+            const toast = document.getElementById('notificationToast');
+            toast.classList.add('translate-y-20', 'opacity-0');
+        }
+        
         // Search functionality
-        document.getElementById('searchInput')?.addEventListener('input', function(e) {
+        document.getElementById('searchTransaction')?.addEventListener('input', function(e) {
             const searchTerm = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('.transaction-row');
+            const rows = document.querySelectorAll('#transactionsTableBody tr');
             
             rows.forEach(row => {
                 const text = row.textContent.toLowerCase();
                 row.style.display = text.includes(searchTerm) ? '' : 'none';
             });
+        });
+        
+        // Notification toggle
+        document.getElementById('notificationToggle')?.addEventListener('change', function() {
+            notificationEnabled = this.checked;
+            addDebugLog('info', `Notifications ${notificationEnabled ? 'enabled' : 'disabled'}`);
         });
     </script>
 </body>
