@@ -147,6 +147,92 @@ transform: translateX(-5px);
 transform: translateX(5px);
 }
 }
+.payment-verification {
+position: relative;
+overflow: hidden;
+}
+.payment-verification::before {
+content: '';
+position: absolute;
+top: 0;
+left: -100%;
+width: 100%;
+height: 100%;
+background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+animation: shimmer 2s infinite;
+}
+@keyframes shimmer {
+100% {
+left: 100%;
+}
+}
+.qr-container {
+position: relative;
+display: inline-block;
+}
+.qr-overlay {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background-color: rgba(255, 255, 255, 0.8);
+display: flex;
+align-items: center;
+justify-content: center;
+border-radius: 8px;
+}
+.verification-steps {
+counter-reset: step;
+}
+.verification-step {
+position: relative;
+padding-left: 2rem;
+margin-bottom: 1.5rem;
+}
+.verification-step::before {
+counter-increment: step;
+content: counter(step);
+position: absolute;
+left: 0;
+top: 0;
+width: 1.5rem;
+height: 1.5rem;
+background-color: #3b82f6;
+color: white;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+font-weight: bold;
+font-size: 0.875rem;
+}
+.verification-step.active::before {
+background-color: #10b981;
+}
+.verification-step.completed::before {
+background-color: #10b981;
+content: '✓';
+}
+.status-indicator {
+display: inline-block;
+width: 10px;
+height: 10px;
+border-radius: 50%;
+margin-right: 0.5rem;
+}
+.status-pending {
+background-color: #f59e0b;
+}
+.status-processing {
+background-color: #3b82f6;
+}
+.status-success {
+background-color: #10b981;
+}
+.status-failed {
+background-color: #ef4444;
+}
 </style>
 </head>
 <body class="bg-gray-50">
@@ -267,8 +353,14 @@ class="flex justify-between items-center text-lg font-bold"
 <p class="text-gray-600 mb-4">
 Scan kode QR di bawah ini untuk membayar
 </p>
-<div class="bg-gray-100 p-4 rounded-lg inline-block">
+<div class="qr-container bg-gray-100 p-4 rounded-lg inline-block">
 <div id="qrcode"></div>
+<div id="qrOverlay" class="qr-overlay hidden">
+<div class="text-center">
+<div class="loading-spinner mx-auto mb-2"></div>
+<p class="text-gray-800 font-medium">Memverifikasi pembayaran...</p>
+</div>
+</div>
 </div>
 <p class="text-sm text-gray-500 mt-4">
 Kode QR berlaku selama
@@ -290,7 +382,8 @@ habis, silakan muat ulang halaman ini.
 </div>
 <div class="flex justify-center space-x-4">
 <button
-onclick="checkPaymentStatus()"
+id="qrisCheckPaymentBtn"
+onclick="checkPaymentStatus('qris')"
 class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
 >
 <i class="fas fa-check mr-2"></i>Saya Sudah Bayar
@@ -388,7 +481,8 @@ class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
 <i class="fas fa-credit-card mr-2"></i>Bayar Sekarang
 </button>
 <button
-onclick="checkPaymentStatus()"
+id="ewalletCheckPaymentBtn"
+onclick="checkPaymentStatus('ewallet')"
 class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition"
 >
 <i class="fas fa-check mr-2"></i>Saya Sudah Bayar
@@ -443,12 +537,42 @@ class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
 <i class="fas fa-copy mr-2"></i>Salin Detail
 </button>
 <button
-onclick="checkPaymentStatus()"
+id="bankCheckPaymentBtn"
+onclick="checkPaymentStatus('bank')"
 class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
 >
 <i class="fas fa-check mr-2"></i>Saya Sudah Bayar
 </button>
 </div>
+</div>
+</div>
+</div>
+<!-- Payment Verification Modal -->
+<div id="verificationModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+<div class="bg-white rounded-xl p-8 max-w-md w-full mx-4 transform transition-all">
+<div class="text-center">
+<h3 class="text-xl font-bold text-gray-800 mb-4">Verifikasi Pembayaran</h3>
+<div class="verification-steps text-left mb-6">
+<div id="step1" class="verification-step">
+Memeriksa status pembayaran...
+</div>
+<div id="step2" class="verification-step">
+Memverifikasi data transaksi...
+</div>
+<div id="step3" class="verification-step">
+Memperbarui status pembayaran...
+</div>
+<div id="step4" class="verification-step">
+Menyelesaikan transaksi...
+</div>
+</div>
+<div id="verificationStatus" class="mb-4">
+<span class="status-indicator status-pending"></span>
+<span id="statusText">Memproses verifikasi pembayaran...</span>
+</div>
+<button id="cancelVerificationBtn" onclick="cancelVerification()" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+Batal
+</button>
 </div>
 </div>
 </div>
@@ -526,6 +650,10 @@ let orderData = null;
 let selectedEwallet = null;
 let countdownTimer = null;
 let paymentTimeout = null;
+let paymentVerificationActive = false;
+let paymentMethod = null;
+let paymentAttempts = 0;
+const MAX_PAYMENT_ATTEMPTS = 3;
 // Initialize page
 document.addEventListener("DOMContentLoaded", function () {
 // Load order data from localStorage
@@ -587,18 +715,22 @@ document.getElementById("bankPayment").classList.add("hidden");
 // Show the appropriate payment section based on the selected method
 switch (orderData.paymentMethod) {
 case "qris":
+paymentMethod = "qris";
 initializeQRISPayment();
 break;
 case "ewallet":
+paymentMethod = "ewallet";
 document
 .getElementById("ewalletPayment")
 .classList.remove("hidden");
 break;
 case "bank":
+paymentMethod = "bank";
 document.getElementById("bankPayment").classList.remove("hidden");
 break;
 default:
 // Default to QRIS if no valid method is selected
+paymentMethod = "qris";
 initializeQRISPayment();
 }
 }
@@ -615,6 +747,7 @@ merchantName: "Marstorekita",
 amount: paymentAmount,
 phone: "85711603847",
 description: `Pembayaran Robux ${orderData.package.robux}`,
+transactionId: orderData.id,
 };
 // Generate QR code
 new QRCode(qrcodeContainer, {
@@ -737,40 +870,139 @@ showErrorModal(
 });
 }
 // Check payment status dengan Google Sheets
-async function checkPaymentStatus() {
-// Show loading overlay
-document.getElementById("loadingOverlay").classList.remove("hidden");
+async function checkPaymentStatus(method) {
+// Check if payment verification is already active
+if (paymentVerificationActive) {
+return;
+}
+// Check if maximum attempts reached
+if (paymentAttempts >= MAX_PAYMENT_ATTEMPTS) {
+showErrorModal(`Anda telah mencoba verifikasi pembayaran ${MAX_PAYMENT_ATTEMPTS} kali. Silakan hubungi admin untuk bantuan.`);
+return;
+}
+// Increment payment attempts
+paymentAttempts++;
+// Set payment verification as active
+paymentVerificationActive = true;
+// Disable check payment button
+disableCheckPaymentButton();
+// Show verification modal
+showVerificationModal();
 try {
-// Perbarui status transaksi di Google Sheets
-const result = await postDataToGoogleAppsScript("updateTransactionStatus", {
-id: orderData.id,
-status: "completed"
-});
-console.log("Response dari Google Apps Script:", result);
-// Hide loading overlay
-document.getElementById("loadingOverlay").classList.add("hidden");
-// Proses pembayaran berhasil
+// Simulate payment verification process
+await simulatePaymentVerification(method);
+// Check transaction status from Google Sheets
+const transactionStatus = await checkTransactionStatus(orderData.id);
+if (transactionStatus === 'completed') {
+// If payment is already completed, show success
 processSuccessfulPayment();
+} else {
+// Simulate payment processing with random success/failure
+const paymentSuccess = Math.random() > 0.3; // 70% success rate for demo
+if (paymentSuccess) {
+// Update transaction status to 'cek' first
+await updateTransactionStatus(orderData.id, 'cek');
+// Wait a moment before updating to 'completed'
+setTimeout(async () => {
+await updateTransactionStatus(orderData.id, 'completed');
+processSuccessfulPayment();
+}, 2000);
+} else {
+// Payment verification failed
+updateVerificationStep(4, false, 'Verifikasi pembayaran gagal. Silakan coba lagi.');
+setTimeout(() => {
+hideVerificationModal();
+enableCheckPaymentButton();
+paymentVerificationActive = false;
+}, 3000);
+}
+}
 } catch (error) {
 console.error('Error checking payment status:', error);
-document.getElementById("loadingOverlay").classList.add("hidden");
-let errorMessage = "Terjadi kesalahan. Silakan coba lagi.";
-if (error.message.includes("Google Apps Script")) {
-errorMessage = "Gagal menghubungi server. Silakan periksa koneksi internet Anda.";
-} else if (error.message.includes("NetworkError")) {
-errorMessage = "Masalah jaringan. Silakan periksa koneksi internet Anda.";
+updateVerificationStep(4, false, 'Terjadi kesalahan: ' + error.message);
+setTimeout(() => {
+hideVerificationModal();
+enableCheckPaymentButton();
+paymentVerificationActive = false;
+}, 3000);
 }
-showErrorModal(errorMessage);
+}
+// Simulate payment verification process
+async function simulatePaymentVerification(method) {
+// Step 1: Memeriksa status pembayaran
+updateVerificationStep(1, true, 'Memeriksa status pembayaran...');
+await sleep(1500);
+// Step 2: Memverifikasi data transaksi
+updateVerificationStep(2, true, 'Memverifikasi data transaksi...');
+await sleep(1500);
+// Step 3: Memperbarui status pembayaran
+updateVerificationStep(3, true, 'Memperbarui status pembayaran...');
+await sleep(1500);
+}
+// Update verification step
+function updateVerificationStep(stepNumber, success, message) {
+const stepElement = document.getElementById(`step${stepNumber}`);
+const statusElement = document.getElementById('verificationStatus');
+const statusTextElement = document.getElementById('statusText');
+// Update step status
+if (success) {
+stepElement.classList.add('completed');
+} else {
+stepElement.classList.add('active');
+}
+// Update status
+statusTextElement.textContent = message;
+if (stepNumber === 4) {
+if (success) {
+statusElement.innerHTML = '<span class="status-indicator status-success"></span><span>Pembayaran berhasil diverifikasi</span>';
+} else {
+statusElement.innerHTML = '<span class="status-indicator status-failed"></span><span>Verifikasi pembayaran gagal</span>';
+}
+}
+}
+// Check transaction status from Google Sheets
+async function checkTransactionStatus(transactionId) {
+try {
+const response = await callGoogleAppsScript("getTransactionStatus", { id: transactionId });
+console.log("Transaction status response:", response);
+return response.status || 'pending';
+} catch (error) {
+console.error('Error checking transaction status:', error);
+throw error;
+}
+}
+// Update transaction status
+async function updateTransactionStatus(transactionId, status) {
+try {
+const result = await postDataToGoogleAppsScript("updateTransactionStatus", {
+id: transactionId,
+status: status
+});
+console.log("Update transaction status result:", result);
+// Also update in localStorage
+const localTransactions = JSON.parse(localStorage.getItem("transactionHistory") || "[]");
+const transactionIndex = localTransactions.findIndex(t => t.id === transactionId);
+if (transactionIndex !== -1) {
+localTransactions[transactionIndex].status = status;
+localStorage.setItem("transactionHistory", JSON.stringify(localTransactions));
+// Trigger storage event for other pages
+window.dispatchEvent(new StorageEvent('storage', {
+key: 'transactionHistory',
+newValue: JSON.stringify(localTransactions),
+url: window.location.href
+}));
+}
+return result;
+} catch (error) {
+console.error('Error updating transaction status:', error);
+throw error;
 }
 }
 // Process successful payment
 async function processSuccessfulPayment() {
 try {
 // Update transaction status in Google Sheets
-const result = await postDataToGoogleAppsScript("updateTransactionStatus", {
-id: orderData.id,
-status: "completed"
-});
+const result = await updateTransactionStatus(orderData.id, "completed");
 console.log("Response dari Google Apps Script:", result);
 // Update transaction status in localStorage
 orderData.status = "completed";
@@ -781,6 +1013,12 @@ const historyIndex = history.findIndex(t => t.id === orderData.id);
 if (historyIndex !== -1) {
 history[historyIndex].status = "completed";
 localStorage.setItem("transactionHistory", JSON.stringify(history));
+// Trigger storage event for other pages
+window.dispatchEvent(new StorageEvent('storage', {
+key: 'transactionHistory',
+newValue: JSON.stringify(history),
+url: window.location.href
+}));
 }
 // Clear any timers
 if (countdownTimer) {
@@ -789,6 +1027,8 @@ clearInterval(countdownTimer);
 if (paymentTimeout) {
 clearTimeout(paymentTimeout);
 }
+// Hide verification modal
+hideVerificationModal();
 // Show success modal
 document.getElementById("successModal").classList.remove("hidden");
 } catch (error) {
@@ -802,6 +1042,12 @@ const historyIndex = history.findIndex(t => t.id === orderData.id);
 if (historyIndex !== -1) {
 history[historyIndex].status = "completed";
 localStorage.setItem("transactionHistory", JSON.stringify(history));
+// Trigger storage event for other pages
+window.dispatchEvent(new StorageEvent('storage', {
+key: 'transactionHistory',
+newValue: JSON.stringify(history),
+url: window.location.href
+}));
 }
 // Clear any timers
 if (countdownTimer) {
@@ -810,9 +1056,78 @@ clearInterval(countdownTimer);
 if (paymentTimeout) {
 clearTimeout(paymentTimeout);
 }
+// Hide verification modal
+hideVerificationModal();
 // Show success modal
 document.getElementById("successModal").classList.remove("hidden");
 }
+}
+// Show verification modal
+function showVerificationModal() {
+document.getElementById("verificationModal").classList.remove("hidden");
+// Reset verification steps
+for (let i = 1; i <= 4; i++) {
+const stepElement = document.getElementById(`step${i}`);
+stepElement.classList.remove('active', 'completed');
+}
+// Reset status
+document.getElementById('verificationStatus').innerHTML = '<span class="status-indicator status-pending"></span><span id="statusText">Memproses verifikasi pembayaran...</span>';
+}
+// Hide verification modal
+function hideVerificationModal() {
+document.getElementById("verificationModal").classList.add("hidden");
+}
+// Cancel verification
+function cancelVerification() {
+hideVerificationModal();
+enableCheckPaymentButton();
+paymentVerificationActive = false;
+}
+// Disable check payment button
+function disableCheckPaymentButton() {
+let buttonId;
+switch (paymentMethod) {
+case 'qris':
+buttonId = 'qrisCheckPaymentBtn';
+break;
+case 'ewallet':
+buttonId = 'ewalletCheckPaymentBtn';
+break;
+case 'bank':
+buttonId = 'bankCheckPaymentBtn';
+break;
+}
+const button = document.getElementById(buttonId);
+if (button) {
+button.disabled = true;
+button.classList.add('opacity-50', 'cursor-not-allowed');
+button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Memverifikasi...';
+}
+}
+// Enable check payment button
+function enableCheckPaymentButton() {
+let buttonId;
+switch (paymentMethod) {
+case 'qris':
+buttonId = 'qrisCheckPaymentBtn';
+break;
+case 'ewallet':
+buttonId = 'ewalletCheckPaymentBtn';
+break;
+case 'bank':
+buttonId = 'bankCheckPaymentBtn';
+break;
+}
+const button = document.getElementById(buttonId);
+if (button) {
+button.disabled = false;
+button.classList.remove('opacity-50', 'cursor-not-allowed');
+button.innerHTML = '<i class="fas fa-check mr-2"></i>Saya Sudah Bayar';
+}
+}
+// Sleep function for delays
+function sleep(ms) {
+return new Promise(resolve => setTimeout(resolve, ms));
 }
 // Show error modal
 function showErrorModal(message) {
