@@ -525,6 +525,12 @@ showDashboard();
 loadTransactions();
 setupAutoRefresh();
 }
+// Listen for storage changes to update transaction history
+window.addEventListener('storage', function(event) {
+if (event.key === 'transactionHistory') {
+loadTransactions();
+}
+});
 });
 // Login function
 function login(event) {
@@ -799,6 +805,12 @@ const transactionIndex = localTransactions.findIndex(t => t.id === transactionId
 if (transactionIndex !== -1) {
 localTransactions[transactionIndex].status = newStatus;
 localStorage.setItem("transactionHistory", JSON.stringify(localTransactions));
+// Trigger storage event untuk update halaman utama
+window.dispatchEvent(new StorageEvent('storage', {
+key: 'transactionHistory',
+newValue: JSON.stringify(localTransactions),
+url: window.location.href
+}));
 }
 // Close modal
 closeStatusUpdateModal();
