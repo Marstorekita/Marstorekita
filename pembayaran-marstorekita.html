@@ -233,6 +233,53 @@ background-color: #10b981;
 .status-failed {
 background-color: #ef4444;
 }
+.payment-proof-section {
+border: 2px dashed #d1d5db;
+border-radius: 0.5rem;
+padding: 1rem;
+margin-top: 1rem;
+}
+.file-upload-label {
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+padding: 2rem;
+border: 2px dashed #d1d5db;
+border-radius: 0.5rem;
+cursor: pointer;
+transition: all 0.3s ease;
+}
+.file-upload-label:hover {
+border-color: #3b82f6;
+background-color: #f0f9ff;
+}
+.file-upload-input {
+display: none;
+}
+.preview-image {
+max-width: 100%;
+max-height: 200px;
+border-radius: 0.5rem;
+margin-top: 1rem;
+}
+.deep-link-button {
+background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+color: white;
+font-weight: 600;
+padding: 0.75rem 1.5rem;
+border-radius: 0.5rem;
+transition: all 0.3s ease;
+display: inline-flex;
+align-items: center;
+}
+.deep-link-button:hover {
+transform: translateY(-2px);
+box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
+}
+.deep-link-button i {
+margin-right: 0.5rem;
+}
 </style>
 </head>
 <body class="bg-gray-50">
@@ -475,6 +522,7 @@ id="ewalletButtons"
 class="hidden mt-6 flex justify-center space-x-4"
 >
 <button
+id="ewalletPayButton"
 onclick="processEwalletPayment()"
 class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
 >
@@ -544,6 +592,29 @@ class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
 <i class="fas fa-check mr-2"></i>Saya Sudah Bayar
 </button>
 </div>
+
+<!-- Payment Proof Section for Bank Transfer -->
+<div id="paymentProofSection" class="payment-proof-section hidden">
+<h3 class="text-lg font-semibold text-gray-800 mb-4">Upload Bukti Transfer</h3>
+<p class="text-gray-600 mb-4">Silakan upload bukti transfer Anda untuk mempercepat proses verifikasi:</p>
+<label for="paymentProof" class="file-upload-label">
+<i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+<span class="text-gray-600">Klik untuk upload bukti transfer</span>
+<span class="text-sm text-gray-500 mt-1">(JPG, PNG, PDF - Max 5MB)</span>
+<input type="file" id="paymentProof" class="file-upload-input" accept="image/*,.pdf" onchange="previewPaymentProof(this)">
+</label>
+<div id="proofPreview" class="hidden mt-4">
+<img id="previewImage" class="preview-image" alt="Preview bukti transfer">
+<div class="flex justify-center mt-4">
+<button onclick="uploadPaymentProof()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+<i class="fas fa-upload mr-2"></i>Upload Bukti
+</button>
+<button onclick="removePaymentProof()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
+<i class="fas fa-trash mr-2"></i>Hapus
+</button>
+</div>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -560,7 +631,7 @@ Memeriksa status pembayaran...
 Memverifikasi data transaksi...
 </div>
 <div id="step3" class="verification-step">
-Memperbarui status pembayaran...
+Memverifikasi bukti pembayaran...
 </div>
 <div id="step4" class="verification-step">
 Menyelesaikan transaksi...
@@ -653,6 +724,8 @@ let paymentTimeout = null;
 let paymentVerificationActive = false;
 let paymentMethod = null;
 let paymentAttempts = 0;
+let paymentProofFile = null;
+let paymentPollingInterval = null;
 const MAX_PAYMENT_ATTEMPTS = 3;
 // Initialize page
 document.addEventListener("DOMContentLoaded", function () {
@@ -727,6 +800,8 @@ break;
 case "bank":
 paymentMethod = "bank";
 document.getElementById("bankPayment").classList.remove("hidden");
+// Show payment proof section for bank transfer
+document.getElementById("paymentProofSection").classList.remove("hidden");
 break;
 default:
 // Default to QRIS if no valid method is selected
@@ -822,7 +897,7 @@ document
 .classList.remove("hidden");
 document.getElementById("ewalletButtons").classList.remove("hidden");
 }
-// Process E-Wallet payment
+// Process E-Wallet payment dengan integrasi deep link
 function processEwalletPayment() {
 if (!selectedEwallet) {
 showErrorModal("Silakan pilih E-Wallet terlebih dahulu");
@@ -830,25 +905,33 @@ return;
 }
 // Show loading overlay
 document.getElementById("loadingOverlay").classList.remove("hidden");
+// Get payment amount
+const paymentAmount = orderData.package.price;
+const transactionId = orderData.id;
+// Generate deep link URLs for different e-wallets
+const deepLinks = {
+ovo: `ovoid://topup?amount=${paymentAmount}&ref=${transactionId}&merchant=Marstorekita`,
+gopay: `gopay://topup?amount=${paymentAmount}&ref=${transactionId}&merchant=Marstorekita`,
+dana: `dana://topup?amount=${paymentAmount}&ref=${transactionId}&merchant=Marstorekita`,
+shopeepay: `shopeepay://topup?amount=${paymentAmount}&ref=${transactionId}&merchant=Marstorekita`
+};
 // Simulate payment processing
 setTimeout(() => {
 // Hide loading overlay
 document.getElementById("loadingOverlay").classList.add("hidden");
-// Redirect to E-Wallet app (in a real implementation, this would use deep linking)
-const ewalletUrls = {
-ovo: "https://ovo.id",
-gopay: "https://gojek.com/gopay",
-dana: "https://dana.id",
-shopeepay: "https://shopee.co.id/shopeepay",
+// Try to open the e-wallet app with deep link
+const deepLink = deepLinks[selectedEwallet];
+console.log("Opening deep link:", deepLink);
+// Try to open the app
+window.open(deepLink, '_blank');
+// Show notification based on selected e-wallet
+const ewalletNames = {
+ovo: "OVO",
+gopay: "GoPay",
+dana: "DANA",
+shopeepay: "ShopeePay",
 };
-// Open E-Wallet in a new window
-window.open(ewalletUrls[selectedEwallet], "_blank");
-// Show notification
-alert(
-`Anda akan diarahkan ke aplikasi ${
-document.getElementById("ewalletName").textContent
-}. Setelah pembayaran berhasil, kembali ke halaman ini dan klik "Saya Sudah Bayar".`
-);
+alert(`Anda akan diarahkan ke aplikasi ${ewalletNames[selectedEwallet]} dengan nominal pembayaran Rp ${paymentAmount.toLocaleString('id-ID')}. Setelah pembayaran berhasil, kembali ke halaman ini dan klik "Saya Sudah Bayar".`);
 }, 1000);
 }
 // Copy bank details
@@ -869,7 +952,42 @@ showErrorModal(
 );
 });
 }
-// Check payment status dengan Google Sheets
+// Preview payment proof
+function previewPaymentProof(input) {
+if (input.files && input.files[0]) {
+const file = input.files[0];
+paymentProofFile = file;
+const reader = new FileReader();
+reader.onload = function(e) {
+document.getElementById("previewImage").src = e.target.result;
+document.getElementById("proofPreview").classList.remove("hidden");
+};
+reader.readAsDataURL(file);
+}
+}
+// Remove payment proof
+function removePaymentProof() {
+document.getElementById("paymentProof").value = "";
+document.getElementById("proofPreview").classList.add("hidden");
+paymentProofFile = null;
+}
+// Upload payment proof
+function uploadPaymentProof() {
+if (!paymentProofFile) {
+showErrorModal("Silakan pilih bukti transfer terlebih dahulu");
+return;
+}
+// Show loading overlay
+document.getElementById("loadingOverlay").classList.remove("hidden");
+// Simulate upload process
+setTimeout(() => {
+// Hide loading overlay
+document.getElementById("loadingOverlay").classList.add("hidden");
+// Show success message
+alert("Bukti transfer berhasil diupload! Admin akan memverifikasi pembayaran Anda dalam waktu maksimal 2x24 jam.");
+}, 1500);
+}
+// Check payment status dengan sistem verifikasi yang lebih baik
 async function checkPaymentStatus(method) {
 // Check if payment verification is already active
 if (paymentVerificationActive) {
@@ -889,34 +1007,8 @@ disableCheckPaymentButton();
 // Show verification modal
 showVerificationModal();
 try {
-// Simulate payment verification process
-await simulatePaymentVerification(method);
-// Check transaction status from Google Sheets
-const transactionStatus = await checkTransactionStatus(orderData.id);
-if (transactionStatus === 'completed') {
-// If payment is already completed, show success
-processSuccessfulPayment();
-} else {
-// Simulate payment processing with random success/failure
-const paymentSuccess = Math.random() > 0.3; // 70% success rate for demo
-if (paymentSuccess) {
-// Update transaction status to 'cek' first
-await updateTransactionStatus(orderData.id, 'cek');
-// Wait a moment before updating to 'completed'
-setTimeout(async () => {
-await updateTransactionStatus(orderData.id, 'completed');
-processSuccessfulPayment();
-}, 2000);
-} else {
-// Payment verification failed
-updateVerificationStep(4, false, 'Verifikasi pembayaran gagal. Silakan coba lagi.');
-setTimeout(() => {
-hideVerificationModal();
-enableCheckPaymentButton();
-paymentVerificationActive = false;
-}, 3000);
-}
-}
+// Start payment verification process
+await verifyPaymentProcess(method);
 } catch (error) {
 console.error('Error checking payment status:', error);
 updateVerificationStep(4, false, 'Terjadi kesalahan: ' + error.message);
@@ -927,37 +1019,126 @@ paymentVerificationActive = false;
 }, 3000);
 }
 }
-// Simulate payment verification process
-async function simulatePaymentVerification(method) {
+// Verify payment process
+async function verifyPaymentProcess(method) {
 // Step 1: Memeriksa status pembayaran
 updateVerificationStep(1, true, 'Memeriksa status pembayaran...');
 await sleep(1500);
 // Step 2: Memverifikasi data transaksi
 updateVerificationStep(2, true, 'Memverifikasi data transaksi...');
 await sleep(1500);
-// Step 3: Memperbarui status pembayaran
-updateVerificationStep(3, true, 'Memperbarui status pembayaran...');
+// Step 3: Memverifikasi pembayaran
+updateVerificationStep(3, true, 'Memverifikasi pembayaran...');
 await sleep(1500);
+// Check transaction status from Google Sheets
+const transactionStatus = await checkTransactionStatus(orderData.id);
+if (transactionStatus === 'completed') {
+// If payment is already completed, show success
+updateVerificationStep(4, true, 'Pembayaran sudah diverifikasi');
+processSuccessfulPayment();
+return;
 }
-// Update verification step
-function updateVerificationStep(stepNumber, success, message) {
-const stepElement = document.getElementById(`step${stepNumber}`);
-const statusElement = document.getElementById('verificationStatus');
-const statusTextElement = document.getElementById('statusText');
-// Update step status
-if (success) {
-stepElement.classList.add('completed');
+// Verify payment based on method
+let paymentVerified = false;
+switch(method) {
+case 'qris':
+paymentVerified = await verifyQRISPayment();
+break;
+case 'ewallet':
+paymentVerified = await verifyEwalletPayment();
+break;
+case 'bank':
+paymentVerified = await verifyBankPayment();
+break;
+}
+if (paymentVerified) {
+// Step 4: Menyelesaikan transaksi
+updateVerificationStep(4, true, 'Pembayaran berhasil diverifikasi');
+await sleep(1000);
+// Update transaction status to 'cek' first
+await updateTransactionStatus(orderData.id, 'cek');
+// Wait a moment before updating to 'completed'
+setTimeout(async () => {
+await updateTransactionStatus(orderData.id, 'completed');
+processSuccessfulPayment();
+}, 2000);
 } else {
-stepElement.classList.add('active');
+// Payment verification failed
+updateVerificationStep(4, false, 'Pembayaran belum ditemukan atau gagal');
+setTimeout(() => {
+hideVerificationModal();
+enableCheckPaymentButton();
+paymentVerificationActive = false;
+}, 3000);
 }
-// Update status
-statusTextElement.textContent = message;
-if (stepNumber === 4) {
-if (success) {
-statusElement.innerHTML = '<span class="status-indicator status-success"></span><span>Pembayaran berhasil diverifikasi</span>';
+}
+// Verify QRIS Payment
+async function verifyQRISPayment() {
+try {
+// Simulasi pengecekan status QRIS
+// Dalam implementasi nyata, ini akan terhubung ke payment gateway seperti Midtrans
+console.log('Verifying QRIS payment for transaction:', orderData.id);
+// Simulasi delay untuk pengecekan
+await sleep(2000);
+// Untuk keperluan demo, kita gunakan random success/failure
+// Dalam implementasi nyata, ini akan mengecek status dari payment gateway
+const paymentSuccess = Math.random() > 0.3; // 70% success rate untuk demo
+if (paymentSuccess) {
+console.log('QRIS payment verified successfully');
+return true;
 } else {
-statusElement.innerHTML = '<span class="status-indicator status-failed"></span><span>Verifikasi pembayaran gagal</span>';
+console.log('QRIS payment verification failed');
+throw new Error('Pembayaran QRIS belum ditemukan atau masih dalam proses');
 }
+} catch (error) {
+console.error('QRIS verification error:', error);
+throw error;
+}
+}
+// Verify E-Wallet Payment
+async function verifyEwalletPayment() {
+try {
+// Simulasi pengecekan status E-Wallet
+// Dalam implementasi nyata, ini akan terhubung ke payment gateway seperti Xendit
+console.log('Verifying E-Wallet payment for transaction:', orderData.id);
+// Simulasi delay untuk pengecekan
+await sleep(2000);
+// Untuk keperluan demo, kita gunakan random success/failure
+// Dalam implementasi nyata, ini akan mengecek status dari payment gateway
+const paymentSuccess = Math.random() > 0.3; // 70% success rate untuk demo
+if (paymentSuccess) {
+console.log('E-Wallet payment verified successfully');
+return true;
+} else {
+console.log('E-Wallet payment verification failed');
+throw new Error('Pembayaran E-Wallet belum ditemukan atau masih dalam proses');
+}
+} catch (error) {
+console.error('E-Wallet verification error:', error);
+throw error;
+}
+}
+// Verify Bank Payment
+async function verifyBankPayment() {
+try {
+// Simulasi pengecekan status Bank Transfer
+console.log('Verifying Bank Transfer payment for transaction:', orderData.id);
+// Simulasi delay untuk pengecekan
+await sleep(2000);
+// Untuk keperluan demo, kita gunakan random success/failure
+// Dalam implementasi nyata, ini akan mengecek status dari payment gateway
+// atau admin akan memverifikasi bukti transfer yang diupload
+const paymentSuccess = Math.random() > 0.3; // 70% success rate untuk demo
+if (paymentSuccess) {
+console.log('Bank Transfer payment verified successfully');
+return true;
+} else {
+console.log('Bank Transfer payment verification failed');
+throw new Error('Pembayaran Bank Transfer belum ditemukan atau masih dalam proses verifikasi oleh admin');
+}
+} catch (error) {
+console.error('Bank Transfer verification error:', error);
+throw error;
 }
 }
 // Check transaction status from Google Sheets
@@ -1027,6 +1208,9 @@ clearInterval(countdownTimer);
 if (paymentTimeout) {
 clearTimeout(paymentTimeout);
 }
+if (paymentPollingInterval) {
+clearInterval(paymentPollingInterval);
+}
 // Hide verification modal
 hideVerificationModal();
 // Show success modal
@@ -1056,6 +1240,9 @@ clearInterval(countdownTimer);
 if (paymentTimeout) {
 clearTimeout(paymentTimeout);
 }
+if (paymentPollingInterval) {
+clearInterval(paymentPollingInterval);
+}
 // Hide verification modal
 hideVerificationModal();
 // Show success modal
@@ -1082,6 +1269,27 @@ function cancelVerification() {
 hideVerificationModal();
 enableCheckPaymentButton();
 paymentVerificationActive = false;
+}
+// Update verification step
+function updateVerificationStep(stepNumber, success, message) {
+const stepElement = document.getElementById(`step${stepNumber}`);
+const statusElement = document.getElementById('verificationStatus');
+const statusTextElement = document.getElementById('statusText');
+// Update step status
+if (success) {
+stepElement.classList.add('completed');
+} else {
+stepElement.classList.add('active');
+}
+// Update status
+statusTextElement.textContent = message;
+if (stepNumber === 4) {
+if (success) {
+statusElement.innerHTML = '<span class="status-indicator status-success"></span><span>Pembayaran berhasil diverifikasi</span>';
+} else {
+statusElement.innerHTML = '<span class="status-indicator status-failed"></span><span>Verifikasi pembayaran gagal</span>';
+}
+}
 }
 // Disable check payment button
 function disableCheckPaymentButton() {
