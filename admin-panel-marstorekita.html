@@ -106,6 +106,18 @@ color: #065f46;
 background-color: #fee2e2;
 color: #991b1b;
 }
+.status-rejected {
+background-color: #fee2e2;
+color: #991b1b;
+}
+.status-invalid {
+background-color: #f3e8ff;
+color: #6b21a8;
+}
+.status-not_found {
+background-color: #ffedd5;
+color: #9a3412;
+}
 .transaction-row:hover {
 background-color: #f9fafb;
 }
@@ -484,6 +496,15 @@ font-weight: bold;
 <button onclick="updateTransactionStatus(currentTransactionId, 'completed')" class="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition">
 <i class="fas fa-check mr-2"></i>Selesai
 </button>
+<button onclick="updateTransactionStatus(currentTransactionId, 'rejected')" class="w-full bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition">
+<i class="fas fa-times mr-2"></i>Tolak
+</button>
+<button onclick="updateTransactionStatus(currentTransactionId, 'invalid')" class="w-full bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-700 transition">
+<i class="fas fa-exclamation-triangle mr-2"></i>Transaksi Tidak Sah
+</button>
+<button onclick="updateTransactionStatus(currentTransactionId, 'not_found')" class="w-full bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700 transition">
+<i class="fas fa-question-circle mr-2"></i>Aku Tidak Ditemukan
+</button>
 </div>
 <button onclick="closeStatusUpdateModal()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
 Batal
@@ -697,13 +718,13 @@ row.innerHTML = `
 <span class="status-badge status-${status}">${getStatusLabel(status)}</span>
 </td>
 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-${status === 'pending' ? `
-<button onclick="openStatusUpdateModal('${id}')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">
-<i class="fas fa-edit mr-1"></i> Ubah
+${status === 'completed' ? `
+<button onclick="deleteTransaction('${id}')" class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 transition">
+<i class="fas fa-trash mr-1"></i> Hapus
 </button>
 ` : `
-<button onclick="openStatusUpdateModal('${id}')" class="bg-${getStatusColor(status)}-600 text-white px-3 py-1 rounded hover:bg-${getStatusColor(status)}-700 transition">
-${getStatusLabel(status)}
+<button onclick="openStatusUpdateModal('${id}')" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">
+<i class="fas fa-edit mr-1"></i> Ubah
 </button>
 `}
 </td>
@@ -717,6 +738,9 @@ switch (status) {
 case 'cek': return 'blue';
 case 'proses': return 'yellow';
 case 'completed': return 'green';
+case 'rejected': return 'red';
+case 'invalid': return 'purple';
+case 'not_found': return 'orange';
 case 'failed': return 'red';
 default: return 'gray';
 }
@@ -737,6 +761,9 @@ case 'pending': return 'Menunggu';
 case 'cek': return 'Cek';
 case 'proses': return 'Proses';
 case 'completed': return 'Selesai';
+case 'rejected': return 'Ditolak';
+case 'invalid': return 'Tidak Sah';
+case 'not_found': return 'Tidak Ditemukan';
 case 'failed': return 'Gagal';
 default: return status;
 }
@@ -824,6 +851,45 @@ loadAnalytics();
 console.error('Error updating transaction:', error);
 showNotification('error', 'Error', 'Gagal memperbarui status transaksi');
 addDebugLog('error', `Failed to update transaction ${transactionId}: ${error.message}`);
+}
+}
+// Delete transaction
+async function deleteTransaction(transactionId) {
+if (!confirm('Apakah Anda yakin ingin menghapus transaksi ini?')) {
+return;
+}
+
+try {
+const result = await postDataToGoogleAppsScript("deleteTransaction", {
+id: transactionId
+});
+
+showNotification('success', 'Berhasil', 'Transaksi telah dihapus');
+addDebugLog('success', `Transaction ${transactionId} deleted`);
+
+// Update di localStorage juga
+const localTransactions = JSON.parse(localStorage.getItem("transactionHistory") || "[]");
+const updatedTransactions = localTransactions.filter(t => t.id !== transactionId);
+localStorage.setItem("transactionHistory", JSON.stringify(updatedTransactions));
+
+// Trigger storage event untuk update halaman utama
+window.dispatchEvent(new StorageEvent('storage', {
+key: 'transactionHistory',
+newValue: JSON.stringify(updatedTransactions),
+url: window.location.href
+}));
+
+// Reload transactions
+loadTransactions();
+
+// If analytics is open, reload it too
+if (currentSection === 'analytics') {
+loadAnalytics();
+}
+} catch (error) {
+console.error('Error deleting transaction:', error);
+showNotification('error', 'Error', 'Gagal menghapus transaksi');
+addDebugLog('error', `Failed to delete transaction ${transactionId}: ${error.message}`);
 }
 }
 // Load analytics data
