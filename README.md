@@ -94,9 +94,9 @@
 
 ### 📝 Syarat & Ketentuan
 Penggunaan layanan ini mengikat diri pada:
-- [Kebijakan Privasi](https://marstorekita.github.io/Marstorekita/privacy)
-- [Syarat & Ketentuan](https://marstorekita.github.io/Marstorekita/syarat-ketentuan)
-- [Kebijakan Roblox](https://marstorekita.github.io/Marstorekita/roblox-policy)
+- [Kebijakan Privasi](https://marstorekita.github.io/Marstorekita/privacy.html)
+- [Syarat & Ketentuan](https://marstorekita.github.io/Marstorekita/syarat-ketentuan.html)
+- [Kebijakan Roblox]([https://marstorekita.github.io/Marstorekita/roblox-policy](https://en.help.roblox.com/hc/id/articles/115004647846-Roblox-Ketentuan-Penggunaan))
 
 ---
 
